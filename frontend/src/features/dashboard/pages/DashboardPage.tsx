@@ -1,4 +1,4 @@
-export function HomePage() {
+export function DashboardPage() {
   return (
     <section className="rounded-xl border bg-card p-8 shadow-sm">
       <p className="text-sm font-medium text-muted-foreground">IncidentOps</p>
