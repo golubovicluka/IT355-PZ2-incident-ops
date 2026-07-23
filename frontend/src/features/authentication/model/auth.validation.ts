@@ -1,4 +1,8 @@
-import type { FieldErrors, LoginValues } from "./auth.types"
+import type {
+  FieldErrors,
+  LoginValues,
+  RegisterValues,
+} from "./auth.types"
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9._-]+$/
 
@@ -39,6 +43,33 @@ export function validateLogin(values: LoginValues) {
 
   if (passwordError) {
     errors.password = passwordError
+  }
+
+  return errors
+}
+
+export function validateRegistration(values: RegisterValues) {
+  const errors: FieldErrors<RegisterValues> = {}
+
+  if (values.displayName.trim().length < 2) {
+    errors.displayName = "Enter the name your team will recognize."
+  }
+
+  const usernameError = validateUsername(values.username)
+  const passwordError = validatePassword(values.password)
+
+  if (usernameError) {
+    errors.username = usernameError
+  }
+
+  if (passwordError) {
+    errors.password = passwordError
+  }
+
+  if (!values.confirmPassword) {
+    errors.confirmPassword = "Confirm your password."
+  } else if (values.confirmPassword !== values.password) {
+    errors.confirmPassword = "Passwords do not match."
   }
 
   return errors
