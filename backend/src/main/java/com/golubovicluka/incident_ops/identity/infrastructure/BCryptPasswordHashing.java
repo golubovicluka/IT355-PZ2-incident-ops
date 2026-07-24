@@ -13,4 +13,9 @@ class BCryptPasswordHashing implements PasswordHashing {
 	public String hash(String plaintext) {
 		return encoder.encode(plaintext);
 	}
+
+	@Override
+	public boolean matches(String plaintext, String passwordHash) {
+		return encoder.matches(plaintext, passwordHash);
+	}
 }
