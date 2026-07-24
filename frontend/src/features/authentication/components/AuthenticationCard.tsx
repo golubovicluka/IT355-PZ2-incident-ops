@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator"
 interface AuthenticationCardProps {
   title: string
   description: string
+  footerDescription?: string
   children: ReactNode
   alternateAction: {
     label: string
@@ -28,6 +29,7 @@ interface AuthenticationCardProps {
 export function AuthenticationCard({
   title,
   description,
+  footerDescription = "This screen validates details locally and does not send them to an API.",
   children,
   alternateAction,
 }: AuthenticationCardProps) {
@@ -55,8 +57,7 @@ export function AuthenticationCard({
       <CardFooter className="flex-col items-start gap-4">
         <Separator />
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Credentials stay in this form until the authentication API is
-          connected.
+          {footerDescription}
         </p>
       </CardFooter>
     </Card>

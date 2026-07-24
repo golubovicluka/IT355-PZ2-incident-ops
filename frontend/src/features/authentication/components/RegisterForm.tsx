@@ -91,17 +91,17 @@ export function RegisterForm() {
         <Field>
           <Button className="w-full" type="submit">
             <UserPlusIcon data-icon="inline-start" />
-            Create account
+            Validate details
           </Button>
         </Field>
       </FieldGroup>
       {isValidated ? (
         <Alert>
           <InfoIcon />
-          <AlertTitle>Registration service is not connected</AlertTitle>
+          <AlertTitle>Details are valid</AlertTitle>
           <AlertDescription>
-            The form is valid. Account creation stays unavailable until its
-            backend contract is defined.
+            No account was created. Account creation, initial role, team
+            assignment, and approval behavior still require a backend decision.
           </AlertDescription>
         </Alert>
       ) : null}

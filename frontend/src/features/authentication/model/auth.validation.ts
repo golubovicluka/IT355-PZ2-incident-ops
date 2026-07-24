@@ -34,15 +34,17 @@ function validatePassword(password: string) {
 
 export function validateLogin(values: LoginValues) {
   const errors: FieldErrors<LoginValues> = {}
-  const usernameError = validateUsername(values.username)
-  const passwordError = validatePassword(values.password)
 
-  if (usernameError) {
-    errors.username = usernameError
+  if (!values.username.trim()) {
+    errors.username = "Enter your username."
+  } else if (values.username.length > 100) {
+    errors.username = "Username must not exceed 100 characters."
   }
 
-  if (passwordError) {
-    errors.password = passwordError
+  if (!values.password) {
+    errors.password = "Enter your password."
+  } else if (values.password.length > 200) {
+    errors.password = "Password must not exceed 200 characters."
   }
 
   return errors

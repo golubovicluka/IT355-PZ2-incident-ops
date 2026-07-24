@@ -1,5 +1,12 @@
-import { InfoIcon, LogInIcon } from "lucide-react"
-import { useState, type ChangeEvent, type FormEvent } from "react"
+import { AlertCircleIcon, LoaderCircleIcon, LogInIcon } from "lucide-react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 
 import {
   Alert,
@@ -9,11 +16,13 @@ import {
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup } from "@/components/ui/field"
 import { AuthField } from "@/features/authentication/components/AuthField"
+import { useAuthentication } from "@/features/authentication/context/useAuthentication"
 import type {
   FieldErrors,
   LoginValues,
 } from "@/features/authentication/model/auth.types"
 import { validateLogin } from "@/features/authentication/model/auth.validation"
+import { ApiError } from "@/shared/api/api-error"
 
 const INITIAL_VALUES: LoginValues = {
   username: "",
@@ -21,28 +30,89 @@ const INITIAL_VALUES: LoginValues = {
 }
 
 export function LoginForm() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { login } = useAuthentication()
   const [values, setValues] = useState(INITIAL_VALUES)
   const [errors, setErrors] = useState<FieldErrors<LoginValues>>({})
-  const [isValidated, setIsValidated] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isPending, setIsPending] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
+  const errorFeedbackRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (submitError) {
+      errorFeedbackRef.current?.focus()
+    }
+  }, [submitError])
 
   function updateField(field: keyof LoginValues) {
     return (event: ChangeEvent<HTMLInputElement>) => {
       const value = event.target.value
       setValues((current) => ({ ...current, [field]: value }))
       setErrors((current) => ({ ...current, [field]: undefined }))
-      setIsValidated(false)
+      setSubmitError(null)
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+
+    if (isPending) {
+      return
+    }
+
     const nextErrors = validateLogin(values)
     setErrors(nextErrors)
-    setIsValidated(Object.keys(nextErrors).length === 0)
+
+    if (Object.keys(nextErrors).length > 0) {
+      requestAnimationFrame(() => {
+        formRef.current
+          ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+          ?.focus()
+      })
+      return
+    }
+
+    setIsPending(true)
+    setSubmitError(null)
+
+    try {
+      await login({
+        username: values.username.trim(),
+        password: values.password,
+      })
+      const from =
+        isRecord(location.state) && typeof location.state.from === "string"
+          ? location.state.from
+          : "/dashboard"
+      navigate(from, { replace: true })
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrors({
+          username: error.fieldErrors.username,
+          password: error.fieldErrors.password,
+        })
+        setSubmitError(error.message)
+      } else {
+        setSubmitError(
+          error instanceof Error
+            ? error.message
+            : "Sign-in is unavailable. Try again.",
+        )
+      }
+    } finally {
+      setIsPending(false)
+    }
   }
 
   return (
-    <form className="flex flex-col gap-6" noValidate onSubmit={handleSubmit}>
+    <form
+      className="flex flex-col gap-6"
+      noValidate
+      onSubmit={handleSubmit}
+      ref={formRef}
+    >
       <FieldGroup>
         <AuthField
           autoComplete="username"
@@ -65,22 +135,30 @@ export function LoginForm() {
           value={values.password}
         />
         <Field>
-          <Button className="w-full" type="submit">
-            <LogInIcon data-icon="inline-start" />
-            Sign in
+          <Button className="w-full" disabled={isPending} type="submit">
+            {isPending ? (
+              <LoaderCircleIcon
+                className="animate-spin"
+                data-icon="inline-start"
+              />
+            ) : (
+              <LogInIcon data-icon="inline-start" />
+            )}
+            {isPending ? "Signing in…" : "Sign in"}
           </Button>
         </Field>
       </FieldGroup>
-      {isValidated ? (
-        <Alert>
-          <InfoIcon />
-          <AlertTitle>Sign-in service is not connected</AlertTitle>
-          <AlertDescription>
-            The form is valid. Server sign-in will use the planned
-            <code> POST /login</code> endpoint when backend auth is available.
-          </AlertDescription>
+      {submitError ? (
+        <Alert ref={errorFeedbackRef} tabIndex={-1} variant="destructive">
+          <AlertCircleIcon />
+          <AlertTitle>Sign-in failed</AlertTitle>
+          <AlertDescription>{submitError}</AlertDescription>
         </Alert>
       ) : null}
     </form>
   )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
 }
