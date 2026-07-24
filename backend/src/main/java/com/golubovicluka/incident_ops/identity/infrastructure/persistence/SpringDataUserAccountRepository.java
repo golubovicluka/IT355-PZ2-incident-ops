@@ -9,4 +9,6 @@ interface SpringDataUserAccountRepository extends JpaRepository<UserAccountJpaEn
 
 	@EntityGraph(attributePaths = {"team", "roles"})
 	Optional<UserAccountJpaEntity> findByUsername(String username);
+
+	boolean existsByTeam_Id(Long teamId);
 }

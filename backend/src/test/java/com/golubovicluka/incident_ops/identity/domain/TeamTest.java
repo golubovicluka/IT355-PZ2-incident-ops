@@ -19,4 +19,11 @@ class TeamTest {
 	void rejectsBlankName() {
 		assertThatIllegalArgumentException().isThrownBy(() -> Team.create("  "));
 	}
+
+	@Test
+	void rejectsNameLongerThanThePersistenceLimit() {
+		assertThatIllegalArgumentException()
+				.isThrownBy(() -> Team.create("a".repeat(101)))
+				.withMessage("name must not exceed 100 characters");
+	}
 }

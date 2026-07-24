@@ -31,8 +31,8 @@ public class InitializeLocalIdentityData {
 
 	@Transactional
 	public void initialize() {
-		Team responderTeam = findOrCreateTeam(RESPONDER_TEAM);
-		Team adminTeam = findOrCreateTeam(ADMIN_TEAM);
+		Team responderTeam = findAssignedTeamOrCreate("responder", RESPONDER_TEAM);
+		Team adminTeam = findAssignedTeamOrCreate("admin", ADMIN_TEAM);
 
 		createUserIfMissing(
 				"responder",
@@ -46,6 +46,12 @@ public class InitializeLocalIdentityData {
 				"admin-demo-password",
 				Role.ADMIN,
 				adminTeam);
+	}
+
+	private Team findAssignedTeamOrCreate(String username, String defaultTeamName) {
+		return users.findByUsername(username)
+				.map(UserAccount::team)
+				.orElseGet(() -> findOrCreateTeam(defaultTeamName));
 	}
 
 	private Team findOrCreateTeam(String name) {

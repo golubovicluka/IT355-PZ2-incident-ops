@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.Set;
 
 import com.golubovicluka.incident_ops.identity.domain.Role;
+import com.golubovicluka.incident_ops.identity.domain.DuplicateTeamNameException;
 import com.golubovicluka.incident_ops.identity.domain.Team;
 import com.golubovicluka.incident_ops.identity.domain.TeamRepository;
 import com.golubovicluka.incident_ops.identity.domain.UserAccount;
@@ -41,6 +42,29 @@ class IdentityPersistenceAdapterTest extends PostgreSQLContainerSupport {
 
 		assertThat(saved.id()).isNotNull();
 		assertThat(teams.findByName("Platform Operations")).contains(saved);
+		assertThat(teams.findById(saved.id())).contains(saved);
+	}
+
+	@Test
+	void listsTeamsByName() {
+		teams.save(Team.create("Site Reliability"));
+		teams.save(Team.create("Application Platform"));
+
+		assertThat(teams.findAll())
+				.extracting(Team::name)
+				.containsExactly("Application Platform", "Site Reliability");
+	}
+
+	@Test
+	void updatesAndDeletesUnreferencedTeam() {
+		Team saved = teams.save(Team.create("Platform Operations"));
+
+		Team updated = teams.save(saved.rename("Core Platform"));
+		teams.delete(updated);
+
+		assertThat(updated.id()).isEqualTo(saved.id());
+		assertThat(updated.name()).isEqualTo("Core Platform");
+		assertThat(teams.findById(saved.id())).isEmpty();
 	}
 
 	@Test
@@ -61,6 +85,7 @@ class IdentityPersistenceAdapterTest extends PostgreSQLContainerSupport {
 		assertThat(loaded.passwordHash()).isEqualTo("$2a$10$persistedHash");
 		assertThat(loaded.roles()).containsExactly(Role.RESPONDER);
 		assertThat(loaded.team()).isEqualTo(team);
+		assertThat(teams.isReferencedByUserAccount(team.id())).isTrue();
 	}
 
 	@Test
@@ -68,7 +93,7 @@ class IdentityPersistenceAdapterTest extends PostgreSQLContainerSupport {
 		teams.save(Team.create("Platform Operations"));
 
 		assertThatThrownBy(() -> teams.save(Team.create("Platform Operations")))
-				.isInstanceOf(DataIntegrityViolationException.class);
+				.isInstanceOf(DuplicateTeamNameException.class);
 	}
 
 	@Test

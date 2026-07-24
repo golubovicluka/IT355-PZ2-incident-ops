@@ -51,4 +51,16 @@ class LocalIdentityDataInitializerTest extends PostgreSQLContainerSupport {
 		assertThat(responder.passwordHash()).isNotEqualTo("responder-demo-password");
 		assertThat(administrator.passwordHash()).isNotEqualTo("admin-demo-password");
 	}
+
+	@Test
+	void renamedDemoTeamIsNotRecreatedAtStartup() throws Exception {
+		UserAccount administrator = users.findByUsername("admin").orElseThrow();
+		teams.save(administrator.team().rename("Operations Administration"));
+
+		initializer.run(new DefaultApplicationArguments());
+
+		assertThat(teams.count()).isEqualTo(2);
+		assertThat(users.findByUsername("admin").orElseThrow().team().name())
+				.isEqualTo("Operations Administration");
+	}
 }
