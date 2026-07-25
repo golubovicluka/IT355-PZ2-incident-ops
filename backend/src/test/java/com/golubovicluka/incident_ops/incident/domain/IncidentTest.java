@@ -204,6 +204,47 @@ class IncidentTest {
 		assertThat(incident.updatedAt()).isEqualTo(CREATED_AT);
 	}
 
+	@Test
+	void addsServerLevelledEscalationEventToEligibleIncident() {
+		Incident incident = persistedIncident(IncidentStatus.INVESTIGATING);
+
+		Incident escalated = incident.addEscalation(
+				2,
+				"  Customer checkout is unavailable.  ",
+				ASSIGNEE,
+				TRANSITIONED_AT);
+
+		assertThat(escalated.status()).isEqualTo(IncidentStatus.INVESTIGATING);
+		assertThat(escalated.updatedAt()).isEqualTo(TRANSITIONED_AT);
+		assertThat(escalated.events().getLast())
+				.isEqualTo(IncidentEvent.escalated(
+						ASSIGNEE,
+						2,
+						"Customer checkout is unavailable.",
+						TRANSITIONED_AT));
+	}
+
+	@ParameterizedTest
+	@MethodSource("blockedEscalationStatuses")
+	void rejectsEscalationForResolvedAndClosedIncidents(
+			IncidentStatus status) {
+		Incident incident = persistedIncident(status);
+
+		assertThatThrownBy(() -> incident.addEscalation(
+				1,
+				"Customer impact requires management attention.",
+				ASSIGNEE,
+				TRANSITIONED_AT))
+				.isInstanceOf(IncidentEscalationNotAllowedException.class)
+				.hasMessage(
+						"Incident cannot be escalated while its status is %s",
+						status);
+
+		assertThat(incident.events()).hasSize(1);
+		assertThat(incident.updatedAt()).isEqualTo(
+				lifecycleUpdatedAt(status));
+	}
+
 	private Incident persistedIncident() {
 		return persistedIncident(IncidentStatus.OPEN);
 	}
@@ -294,5 +335,9 @@ class IncidentTest {
 				.flatMap(current -> Arrays.stream(IncidentStatus.values())
 						.filter(next -> !allowed.contains(current + "->" + next))
 						.map(next -> Arguments.of(current, next)));
+	}
+
+	private static Stream<IncidentStatus> blockedEscalationStatuses() {
+		return Stream.of(IncidentStatus.RESOLVED, IncidentStatus.CLOSED);
 	}
 }

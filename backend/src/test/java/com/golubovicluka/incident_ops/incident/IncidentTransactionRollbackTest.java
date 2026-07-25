@@ -11,6 +11,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.golubovicluka.incident_ops.escalation.application.EscalateIncident;
+import com.golubovicluka.incident_ops.escalation.application.command.EscalateIncidentCommand;
+import com.golubovicluka.incident_ops.escalation.domain.Escalation;
+import com.golubovicluka.incident_ops.escalation.domain.EscalationRepository;
+import com.golubovicluka.incident_ops.escalation.infrastructure.persistence.EscalationPersistenceAdapter;
 import com.golubovicluka.incident_ops.identity.domain.Role;
 import com.golubovicluka.incident_ops.identity.domain.Team;
 import com.golubovicluka.incident_ops.identity.domain.TeamRepository;
@@ -66,7 +71,13 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 	private UpdateIncident updateIncident;
 
 	@Autowired
+	private EscalateIncident escalateIncident;
+
+	@Autowired
 	private FailAfterSaveIncidentRepository incidents;
+
+	@Autowired
+	private FailAfterSaveEscalationRepository escalations;
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
@@ -90,6 +101,7 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 				Criticality.HIGH,
 				new OwningTeam(team.id(), team.name())));
 		incidents.allowSaves();
+		escalations.allowSaves();
 	}
 
 	@Test
@@ -128,6 +140,24 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 		assertThat(countRows("incident_events")).isEqualTo(eventCount);
 	}
 
+	@Test
+	void failedEscalationRollsBackEscalationAndTimelineEvent() {
+		IncidentDetailView created = createIncident.execute(createCommand());
+		long eventCount = countRows("incident_events");
+		long escalationCount = countRows("escalations");
+		escalations.failNextSave();
+
+		assertThatThrownBy(() -> escalateIncident.execute(
+				new EscalateIncidentCommand(
+						created.id(),
+						"Customer impact requires escalation.",
+						reporter.username())))
+				.isInstanceOf(SimulatedPersistenceFailure.class);
+
+		assertThat(countRows("incident_events")).isEqualTo(eventCount);
+		assertThat(countRows("escalations")).isEqualTo(escalationCount);
+	}
+
 	private CreateIncidentCommand createCommand() {
 		return new CreateIncidentCommand(
 				"Rollback test incident",
@@ -160,6 +190,13 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 			AtomicInteger sequence = new AtomicInteger();
 			return () -> "INC-ROLLBACK-%04d".formatted(
 					sequence.incrementAndGet());
+		}
+
+		@Bean
+		@Primary
+		FailAfterSaveEscalationRepository failAfterSaveEscalationRepository(
+				EscalationPersistenceAdapter delegate) {
+			return new FailAfterSaveEscalationRepository(delegate);
 		}
 
 		@Bean
@@ -199,6 +236,41 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 		@Override
 		public Optional<Incident> findById(long id) {
 			return delegate.findById(id);
+		}
+
+		void failNextSave() {
+			failNextSave = true;
+		}
+
+		void allowSaves() {
+			failNextSave = false;
+		}
+	}
+
+	static final class FailAfterSaveEscalationRepository
+			implements EscalationRepository {
+
+		private final EscalationPersistenceAdapter delegate;
+		private boolean failNextSave;
+
+		FailAfterSaveEscalationRepository(
+				EscalationPersistenceAdapter delegate) {
+			this.delegate = delegate;
+		}
+
+		@Override
+		public Escalation save(Escalation escalation) {
+			Escalation saved = delegate.save(escalation);
+			if (failNextSave) {
+				failNextSave = false;
+				throw new SimulatedPersistenceFailure();
+			}
+			return saved;
+		}
+
+		@Override
+		public int findHighestLevel(long incidentId) {
+			return delegate.findHighestLevel(incidentId);
 		}
 
 		void failNextSave() {

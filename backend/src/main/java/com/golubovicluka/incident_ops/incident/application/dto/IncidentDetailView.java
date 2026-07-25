@@ -25,11 +25,51 @@ public record IncidentDetailView(
 		Instant acknowledgedAt,
 		Instant resolvedAt,
 		List<IncidentStatus> allowedTransitions,
-		List<EventView> timeline) {
+		List<EventView> timeline,
+		List<EscalationView> escalations) {
+
+	public IncidentDetailView(
+			Long id,
+			String referenceCode,
+			String title,
+			String description,
+			IncidentPriority priority,
+			IncidentStatus status,
+			ManagedServiceView managedService,
+			UserView reporter,
+			UserView assignee,
+			Instant createdAt,
+			Instant updatedAt,
+			Instant acknowledgedAt,
+			Instant resolvedAt,
+			List<IncidentStatus> allowedTransitions,
+			List<EventView> timeline) {
+		this(
+				id,
+				referenceCode,
+				title,
+				description,
+				priority,
+				status,
+				managedService,
+				reporter,
+				assignee,
+				createdAt,
+				updatedAt,
+				acknowledgedAt,
+				resolvedAt,
+				allowedTransitions,
+				timeline,
+				timeline.stream()
+						.filter(event -> event.kind() == IncidentEventKind.ESCALATED)
+						.map(EscalationView::from)
+						.toList());
+	}
 
 	public IncidentDetailView {
 		allowedTransitions = List.copyOf(allowedTransitions);
 		timeline = List.copyOf(timeline);
+		escalations = List.copyOf(escalations);
 	}
 
 	public static IncidentDetailView from(Incident incident) {
@@ -72,7 +112,29 @@ public record IncidentDetailView(
 			IncidentStatus previousStatus,
 			IncidentStatus newStatus,
 			String note,
+			Integer escalationLevel,
+			String escalationReason,
 			Instant occurredAt) {
+
+		public EventView(
+				Long id,
+				IncidentEventKind kind,
+				UserView actor,
+				IncidentStatus previousStatus,
+				IncidentStatus newStatus,
+				String note,
+				Instant occurredAt) {
+			this(
+					id,
+					kind,
+					actor,
+					previousStatus,
+					newStatus,
+					note,
+					null,
+					null,
+					occurredAt);
+		}
 
 		static EventView from(IncidentEvent event) {
 			return new EventView(
@@ -82,6 +144,23 @@ public record IncidentDetailView(
 					event.previousStatus(),
 					event.newStatus(),
 					event.note(),
+					event.escalationLevel(),
+					event.escalationReason(),
+					event.occurredAt());
+		}
+	}
+
+	public record EscalationView(
+			int level,
+			String reason,
+			UserView actor,
+			Instant escalatedAt) {
+
+		static EscalationView from(EventView event) {
+			return new EscalationView(
+					event.escalationLevel(),
+					event.escalationReason(),
+					event.actor(),
 					event.occurredAt());
 		}
 	}

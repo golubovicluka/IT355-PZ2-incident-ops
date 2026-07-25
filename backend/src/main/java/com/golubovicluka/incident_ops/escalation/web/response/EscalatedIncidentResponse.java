@@ -1,14 +1,17 @@
-package com.golubovicluka.incident_ops.incident.web.response;
+package com.golubovicluka.incident_ops.escalation.web.response;
 
 import java.time.Instant;
 import java.util.List;
 
+import com.golubovicluka.incident_ops.analytics.domain.SlaPhase;
+import com.golubovicluka.incident_ops.analytics.domain.SlaState;
 import com.golubovicluka.incident_ops.incident.application.dto.IncidentDetailView;
+import com.golubovicluka.incident_ops.incident.application.dto.IncidentSlaView;
 import com.golubovicluka.incident_ops.incident.domain.IncidentEventKind;
 import com.golubovicluka.incident_ops.incident.domain.IncidentPriority;
 import com.golubovicluka.incident_ops.incident.domain.IncidentStatus;
 
-public record IncidentDetailResponse(
+public record EscalatedIncidentResponse(
 		Long id,
 		String referenceCode,
 		String title,
@@ -24,16 +27,17 @@ public record IncidentDetailResponse(
 		Instant resolvedAt,
 		List<IncidentStatus> allowedTransitions,
 		List<EventResponse> timeline,
-		List<EscalationResponse> escalations) {
+		List<EscalationResponse> escalations,
+		SlaResponse sla) {
 
-	public IncidentDetailResponse {
+	public EscalatedIncidentResponse {
 		allowedTransitions = List.copyOf(allowedTransitions);
 		timeline = List.copyOf(timeline);
 		escalations = List.copyOf(escalations);
 	}
 
-	public static IncidentDetailResponse from(IncidentDetailView incident) {
-		return new IncidentDetailResponse(
+	public static EscalatedIncidentResponse from(IncidentDetailView incident) {
+		return new EscalatedIncidentResponse(
 				incident.id(),
 				incident.referenceCode(),
 				incident.title(),
@@ -53,7 +57,8 @@ public record IncidentDetailResponse(
 				incident.timeline().stream().map(EventResponse::from).toList(),
 				incident.escalations().stream()
 						.map(EscalationResponse::from)
-						.toList());
+						.toList(),
+				SlaResponse.from(incident.sla()));
 	}
 
 	public record ManagedServiceResponse(Long id, String name) {
@@ -109,6 +114,16 @@ public record IncidentDetailResponse(
 					escalation.reason(),
 					UserResponse.from(escalation.actor()),
 					escalation.escalatedAt());
+		}
+	}
+
+	public record SlaResponse(
+			SlaState state,
+			SlaPhase phase,
+			Instant deadline) {
+
+		static SlaResponse from(IncidentSlaView sla) {
+			return new SlaResponse(sla.state(), sla.phase(), sla.deadline());
 		}
 	}
 }

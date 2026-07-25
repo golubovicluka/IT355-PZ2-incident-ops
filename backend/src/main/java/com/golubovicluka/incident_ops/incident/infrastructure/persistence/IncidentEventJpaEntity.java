@@ -52,6 +52,15 @@ class IncidentEventJpaEntity {
 	@Column(updatable = false, length = IncidentEvent.MAX_NOTE_LENGTH)
 	private String note;
 
+	@Column(name = "escalation_level", updatable = false)
+	private Integer escalationLevel;
+
+	@Column(
+			name = "escalation_reason",
+			updatable = false,
+			length = IncidentEvent.MAX_ESCALATION_REASON_LENGTH)
+	private String escalationReason;
+
 	protected IncidentEventJpaEntity() {
 	}
 
@@ -62,6 +71,8 @@ class IncidentEventJpaEntity {
 			IncidentStatus previousStatus,
 			IncidentStatus newStatus,
 			String note,
+			Integer escalationLevel,
+			String escalationReason,
 			Instant occurredAt) {
 		this.incident = incident;
 		this.kind = kind;
@@ -69,6 +80,8 @@ class IncidentEventJpaEntity {
 		this.previousStatus = previousStatus;
 		this.newStatus = newStatus;
 		this.note = note;
+		this.escalationLevel = escalationLevel;
+		this.escalationReason = escalationReason;
 		this.occurredAt = occurredAt;
 	}
 
@@ -94,6 +107,14 @@ class IncidentEventJpaEntity {
 
 	String getNote() {
 		return note;
+	}
+
+	Integer getEscalationLevel() {
+		return escalationLevel;
+	}
+
+	String getEscalationReason() {
+		return escalationReason;
 	}
 
 	Instant getOccurredAt() {

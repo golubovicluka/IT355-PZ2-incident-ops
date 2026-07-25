@@ -214,6 +214,43 @@ public final class Incident {
 				notedEvents);
 	}
 
+	public Incident addEscalation(
+			int level,
+			String reason,
+			IncidentUser actor,
+			Instant escalatedAt) {
+		Objects.requireNonNull(actor, "actor must not be null");
+		Objects.requireNonNull(escalatedAt, "escalatedAt must not be null");
+		if (status == IncidentStatus.RESOLVED || status == IncidentStatus.CLOSED) {
+			throw new IncidentEscalationNotAllowedException(status);
+		}
+		if (escalatedAt.isBefore(updatedAt)) {
+			throw new IllegalArgumentException(
+					"escalatedAt must not be before updatedAt");
+		}
+		List<IncidentEvent> escalatedEvents = new ArrayList<>(events);
+		escalatedEvents.add(IncidentEvent.escalated(
+				actor,
+				level,
+				reason,
+				escalatedAt));
+		return new Incident(
+				id,
+				referenceCode,
+				title,
+				description,
+				priority,
+				status,
+				managedService,
+				reporter,
+				assignee,
+				createdAt,
+				escalatedAt,
+				acknowledgedAt,
+				resolvedAt,
+				escalatedEvents);
+	}
+
 	public Long id() {
 		return id;
 	}

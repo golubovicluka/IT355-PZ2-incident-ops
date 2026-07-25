@@ -38,6 +38,8 @@ final class IncidentPersistenceMapper {
 						event.previousStatus(),
 						event.newStatus(),
 						event.note(),
+						event.escalationLevel(),
+						event.escalationReason(),
 						event.occurredAt())));
 		return entity;
 	}
@@ -69,6 +71,8 @@ final class IncidentPersistenceMapper {
 				entity.getPreviousStatus(),
 				entity.getNewStatus(),
 				entity.getNote(),
+				entity.getEscalationLevel(),
+				entity.getEscalationReason(),
 				entity.getOccurredAt());
 	}
 
