@@ -1,5 +1,6 @@
 import {
   CatalogueIcon,
+  PolicyIcon,
   ServiceIcon,
   ShieldUserIcon,
   UserGroupIcon,
@@ -15,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { PolicyManagementSection } from "@/features/administration/components/PolicyManagementSection"
 import { ServiceManagementSection } from "@/features/administration/components/ServiceManagementSection"
 import { TeamManagementSection } from "@/features/administration/components/TeamManagementSection"
 
@@ -85,12 +87,27 @@ export function AdminPage() {
               />
               Managed services
             </a>
+            <a
+              className={buttonVariants({
+                className: "w-full justify-start",
+                variant: "outline",
+              })}
+              href="#policies"
+            >
+              <HugeiconsIcon
+                data-icon="inline-start"
+                icon={PolicyIcon}
+                strokeWidth={2}
+              />
+              Escalation policies
+            </a>
           </CardContent>
         </Card>
 
         <div className="flex min-w-0 flex-col gap-6">
           <TeamManagementSection />
           <ServiceManagementSection />
+          <PolicyManagementSection />
         </div>
       </div>
     </div>

@@ -5,8 +5,8 @@ import {
   Delete02Icon,
   Loading03Icon,
   PencilEdit01Icon,
+  PolicyIcon,
   RefreshIcon,
-  ServiceIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -52,41 +52,52 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  createManagedService,
-  deleteManagedService,
-  listManagedServices,
-  updateManagedService,
-} from "@/features/administration/api/services-api"
-import { listTeams } from "@/features/administration/api/teams-api"
-import { DeleteServiceDialog } from "@/features/administration/components/DeleteServiceDialog"
-import { ServiceFormDialog } from "@/features/administration/components/ServiceFormDialog"
+  createEscalationPolicy,
+  deleteEscalationPolicy,
+  listEscalationPolicies,
+  updateEscalationPolicy,
+} from "@/features/administration/api/policies-api"
+import { listManagedServices } from "@/features/administration/api/services-api"
+import { DeletePolicyDialog } from "@/features/administration/components/DeletePolicyDialog"
+import { PolicyFormDialog } from "@/features/administration/components/PolicyFormDialog"
 import type {
-  ManagedService,
-  ManagedServiceRequest,
-} from "@/features/administration/model/service.types"
-import { notifyManagedServicesChanged } from "@/features/administration/model/administration.events"
+  EscalationPolicy,
+  EscalationPolicyRequest,
+  IncidentPriority,
+} from "@/features/administration/model/policy.types"
+import { MANAGED_SERVICES_CHANGED_EVENT } from "@/features/administration/model/administration.events"
+import type { ManagedService } from "@/features/administration/model/service.types"
 import { ApiError } from "@/shared/api/api-error"
-import type {
-  CatalogTeam,
-  Criticality,
-} from "@/shared/catalogs/catalog.types"
 
 type LoadState = "loading" | "ready" | "error"
 
-type ServiceFormState =
+type PolicyFormState =
   | {
       mode: "create"
     }
   | {
       mode: "edit"
-      service: ManagedService
+      policy: EscalationPolicy
     }
 
-const criticalityLabels: Record<Criticality, string> = {
-  LOW: "Low",
-  MEDIUM: "Medium",
-  HIGH: "High",
-  CRITICAL: "Critical",
+const priorityLabels: Record<IncidentPriority, string> = {
+  SEV1: "Critical",
+  SEV2: "High",
+  SEV3: "Medium",
+  SEV4: "Low",
+}
+
+function sortPolicies(policies: EscalationPolicy[]) {
+  return [...policies].sort(
+    (first, second) =>
+      first.managedService.name.localeCompare(
+        second.managedService.name,
+        undefined,
+        { sensitivity: "base" },
+      ) ||
+      first.priority.localeCompare(second.priority) ||
+      first.id - second.id,
+  )
 }
 
 function sortServices(services: ManagedService[]) {
@@ -98,40 +109,35 @@ function sortServices(services: ManagedService[]) {
   )
 }
 
-function sortTeams(teams: CatalogTeam[]) {
-  return [...teams].sort(
-    (first, second) =>
-      first.name.localeCompare(second.name, undefined, {
-        sensitivity: "base",
-      }) || first.id - second.id,
-  )
-}
-
 function getRequestErrorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback
 }
 
-function criticalityVariant(criticality: Criticality) {
-  if (criticality === "CRITICAL") {
+function priorityVariant(priority: IncidentPriority) {
+  if (priority === "SEV1") {
     return "destructive" as const
   }
-  if (criticality === "HIGH") {
+  if (priority === "SEV2") {
     return "secondary" as const
   }
   return "outline" as const
 }
 
-export function ServiceManagementSection() {
+function formatMinutes(minutes: number) {
+  return `${minutes.toLocaleString()} min`
+}
+
+export function PolicyManagementSection() {
+  const [policies, setPolicies] = useState<EscalationPolicy[]>([])
   const [services, setServices] = useState<ManagedService[]>([])
-  const [teams, setTeams] = useState<CatalogTeam[]>([])
   const [loadState, setLoadState] = useState<LoadState>("loading")
   const [loadError, setLoadError] = useState<string>()
   const [isRetrying, setIsRetrying] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string>()
-  const [serviceForm, setServiceForm] = useState<ServiceFormState>()
-  const [isServiceFormOpen, setIsServiceFormOpen] = useState(false)
-  const [serviceToDelete, setServiceToDelete] =
-    useState<ManagedService>()
+  const [policyForm, setPolicyForm] = useState<PolicyFormState>()
+  const [isPolicyFormOpen, setIsPolicyFormOpen] = useState(false)
+  const [policyToDelete, setPolicyToDelete] =
+    useState<EscalationPolicy>()
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const sectionTitleRef = useRef<HTMLHeadingElement>(null)
   const createButtonRef = useRef<HTMLButtonElement>(null)
@@ -141,34 +147,48 @@ export function ServiceManagementSection() {
   useEffect(() => {
     const controller = new AbortController()
 
-    async function loadInitialData() {
+    async function loadData(signal?: AbortSignal) {
       try {
-        const [serviceResponse, teamResponse] = await Promise.all([
-          listManagedServices(controller.signal),
-          listTeams(controller.signal),
+        const [policyResponse, serviceResponse] = await Promise.all([
+          listEscalationPolicies(signal),
+          listManagedServices(signal),
         ])
+        setPolicies(sortPolicies(policyResponse))
         setServices(sortServices(serviceResponse))
-        setTeams(sortTeams(teamResponse))
         setLoadError(undefined)
         setLoadState("ready")
       } catch (error) {
-        if (controller.signal.aborted) {
+        if (signal?.aborted) {
           return
         }
 
         setLoadError(
           getRequestErrorMessage(
             error,
-            "Managed services or owning teams are unavailable. Try loading them again.",
+            "Escalation policies or managed services are unavailable. Try loading them again.",
           ),
         )
         setLoadState("error")
       }
     }
 
-    void loadInitialData()
+    function handleManagedServicesChanged() {
+      void loadData()
+    }
 
-    return () => controller.abort()
+    window.addEventListener(
+      MANAGED_SERVICES_CHANGED_EVENT,
+      handleManagedServicesChanged,
+    )
+    void loadData(controller.signal)
+
+    return () => {
+      controller.abort()
+      window.removeEventListener(
+        MANAGED_SERVICES_CHANGED_EVENT,
+        handleManagedServicesChanged,
+      )
+    }
   }, [])
 
   useEffect(() => {
@@ -190,12 +210,12 @@ export function ServiceManagementSection() {
 
     setIsRetrying(true)
     try {
-      const [serviceResponse, teamResponse] = await Promise.all([
+      const [policyResponse, serviceResponse] = await Promise.all([
+        listEscalationPolicies(),
         listManagedServices(),
-        listTeams(),
       ])
+      setPolicies(sortPolicies(policyResponse))
       setServices(sortServices(serviceResponse))
-      setTeams(sortTeams(teamResponse))
       setLoadError(undefined)
       setLoadState("ready")
       requestAnimationFrame(() => sectionTitleRef.current?.focus())
@@ -203,7 +223,7 @@ export function ServiceManagementSection() {
       setLoadError(
         getRequestErrorMessage(
           error,
-          "Managed services or owning teams are unavailable. Try loading them again.",
+          "Escalation policies or managed services are unavailable. Try loading them again.",
         ),
       )
     } finally {
@@ -213,77 +233,74 @@ export function ServiceManagementSection() {
 
   function openCreateDialog(event: MouseEvent<HTMLButtonElement>) {
     formFinalFocusRef.current = event.currentTarget
-    setServiceForm({ mode: "create" })
-    setIsServiceFormOpen(true)
+    setPolicyForm({ mode: "create" })
+    setIsPolicyFormOpen(true)
   }
 
   function openEditDialog(
     event: MouseEvent<HTMLButtonElement>,
-    service: ManagedService,
+    policy: EscalationPolicy,
   ) {
     formFinalFocusRef.current = event.currentTarget
-    setServiceForm({ mode: "edit", service })
-    setIsServiceFormOpen(true)
+    setPolicyForm({ mode: "edit", policy })
+    setIsPolicyFormOpen(true)
   }
 
   function openDeleteDialog(
     event: MouseEvent<HTMLButtonElement>,
-    service: ManagedService,
+    policy: EscalationPolicy,
   ) {
     deleteFinalFocusRef.current = event.currentTarget
-    setServiceToDelete(service)
+    setPolicyToDelete(policy)
     setIsDeleteDialogOpen(true)
   }
 
-  async function handleCreate(request: ManagedServiceRequest) {
+  async function handleCreate(request: EscalationPolicyRequest) {
     setSuccessMessage(undefined)
-    const created = await createManagedService(request)
+    const created = await createEscalationPolicy(request)
     formFinalFocusRef.current = createButtonRef.current
-    setServices((current) => sortServices([...current, created]))
-    notifyManagedServicesChanged()
-    setSuccessMessage("Managed service created.")
+    setPolicies((current) => sortPolicies([...current, created]))
+    setSuccessMessage("Escalation policy created.")
   }
 
   async function handleUpdate(
-    service: ManagedService,
-    request: ManagedServiceRequest,
+    policy: EscalationPolicy,
+    request: EscalationPolicyRequest,
   ) {
     setSuccessMessage(undefined)
-    const updated = await updateManagedService(service.id, request)
-    setServices((current) =>
-      sortServices(
+    const updated = await updateEscalationPolicy(policy.id, request)
+    setPolicies((current) =>
+      sortPolicies(
         current.map((item) => (item.id === updated.id ? updated : item)),
       ),
     )
-    notifyManagedServicesChanged()
-    setSuccessMessage("Managed service updated.")
+    setSuccessMessage("Escalation policy updated.")
   }
 
-  async function handleDelete(service: ManagedService) {
+  async function handleDelete(policy: EscalationPolicy) {
     setSuccessMessage(undefined)
-    await deleteManagedService(service.id)
+    await deleteEscalationPolicy(policy.id)
     deleteFinalFocusRef.current = sectionTitleRef.current
-    setServices((current) =>
-      current.filter((item) => item.id !== service.id),
+    setPolicies((current) =>
+      current.filter((item) => item.id !== policy.id),
     )
-    notifyManagedServicesChanged()
-    setSuccessMessage("Managed service deleted.")
+    setSuccessMessage("Escalation policy deleted.")
   }
 
-  const createDisabled = loadState !== "ready" || teams.length === 0
+  const createDisabled = loadState !== "ready" || services.length === 0
 
   return (
     <>
-      <Card className="scroll-mt-6" id="services">
+      <Card className="scroll-mt-6" id="policies">
         <CardHeader>
           <CardTitle>
             <h2 ref={sectionTitleRef} tabIndex={-1}>
-              Managed services
+              Escalation policies
             </h2>
           </CardTitle>
           <CardDescription>
-            Maintain the production services available to incident forms and
-            filters.
+            Maintain acknowledgement and resolution deadlines by service and
+            incident priority.
           </CardDescription>
           <CardAction>
             <Button
@@ -297,7 +314,7 @@ export function ServiceManagementSection() {
                 icon={Add01Icon}
                 strokeWidth={2}
               />
-              Create service
+              Create policy
             </Button>
           </CardAction>
         </CardHeader>
@@ -313,12 +330,12 @@ export function ServiceManagementSection() {
             </Alert>
           ) : null}
 
-          {loadState === "loading" ? <ServiceListSkeleton /> : null}
+          {loadState === "loading" ? <PolicyListSkeleton /> : null}
 
           {loadState === "error" ? (
             <Alert variant="destructive">
               <HugeiconsIcon icon={AlertCircleIcon} strokeWidth={2} />
-              <AlertTitle>Unable to load managed services</AlertTitle>
+              <AlertTitle>Unable to load escalation policies</AlertTitle>
               <AlertDescription>{loadError}</AlertDescription>
               <AlertAction>
                 <Button
@@ -340,30 +357,30 @@ export function ServiceManagementSection() {
             </Alert>
           ) : null}
 
-          {loadState === "ready" && teams.length === 0 ? (
+          {loadState === "ready" && services.length === 0 ? (
             <Alert>
               <HugeiconsIcon icon={AlertCircleIcon} strokeWidth={2} />
-              <AlertTitle>Create an owning team first</AlertTitle>
+              <AlertTitle>Create a managed service first</AlertTitle>
               <AlertDescription>
-                Managed services require a valid owning team. Add one in the
-                Teams section before creating a service.
+                Escalation policies require a valid managed service. Add one
+                in the Managed services section before creating a policy.
               </AlertDescription>
             </Alert>
           ) : null}
 
-          {loadState === "ready" && services.length === 0 ? (
+          {loadState === "ready" && policies.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
-                  <HugeiconsIcon icon={ServiceIcon} strokeWidth={2} />
+                  <HugeiconsIcon icon={PolicyIcon} strokeWidth={2} />
                 </EmptyMedia>
-                <EmptyTitle>No managed services yet</EmptyTitle>
+                <EmptyTitle>No escalation policies yet</EmptyTitle>
                 <EmptyDescription>
-                  Add the first production service to make it available in
-                  incident workflows.
+                  Add the first service and priority rule to define its SLA
+                  deadlines.
                 </EmptyDescription>
               </EmptyHeader>
-              {teams.length > 0 ? (
+              {services.length > 0 ? (
                 <EmptyContent>
                   <Button onClick={openCreateDialog} type="button">
                     <HugeiconsIcon
@@ -371,52 +388,54 @@ export function ServiceManagementSection() {
                       icon={Add01Icon}
                       strokeWidth={2}
                     />
-                    Create service
+                    Create policy
                   </Button>
                 </EmptyContent>
               ) : null}
             </Empty>
           ) : null}
 
-          {loadState === "ready" && services.length > 0 ? (
-            <div className="rounded-lg border">
+          {loadState === "ready" && policies.length > 0 ? (
+            <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableCaption className="sr-only">
-                  Managed services in the administrative catalog
+                  Escalation policies in the administrative catalog
                 </TableCaption>
                 <TableHeader>
                   <TableRow>
                     <TableHead scope="col">Service</TableHead>
-                    <TableHead scope="col">Criticality</TableHead>
-                    <TableHead scope="col">Owning team</TableHead>
+                    <TableHead scope="col">Priority</TableHead>
+                    <TableHead scope="col">Acknowledge by</TableHead>
+                    <TableHead scope="col">Resolve by</TableHead>
                     <TableHead className="text-right" scope="col">
                       Actions
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {services.map((service) => (
-                    <TableRow key={service.id}>
-                      <TableCell className="max-w-sm whitespace-normal">
-                        <div className="font-medium">{service.name}</div>
-                        <div className="mt-1 line-clamp-2 text-muted-foreground">
-                          {service.description}
-                        </div>
+                  {policies.map((policy) => (
+                    <TableRow key={policy.id}>
+                      <TableCell className="font-medium">
+                        {policy.managedService.name}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={criticalityVariant(service.criticality)}
-                        >
-                          {criticalityLabels[service.criticality]}
+                        <Badge variant={priorityVariant(policy.priority)}>
+                          {policy.priority} ·{" "}
+                          {priorityLabels[policy.priority]}
                         </Badge>
                       </TableCell>
-                      <TableCell>{service.owningTeam.name}</TableCell>
+                      <TableCell>
+                        {formatMinutes(policy.acknowledgementMinutes)}
+                      </TableCell>
+                      <TableCell>
+                        {formatMinutes(policy.resolutionMinutes)}
+                      </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-2">
                           <Button
-                            aria-label={`Edit ${service.name}`}
+                            aria-label={`Edit ${policy.managedService.name} ${policy.priority} policy`}
                             onClick={(event) =>
-                              openEditDialog(event, service)
+                              openEditDialog(event, policy)
                             }
                             size="sm"
                             type="button"
@@ -430,9 +449,9 @@ export function ServiceManagementSection() {
                             Edit
                           </Button>
                           <Button
-                            aria-label={`Delete ${service.name}`}
+                            aria-label={`Delete ${policy.managedService.name} ${policy.priority} policy`}
                             onClick={(event) =>
-                              openDeleteDialog(event, service)
+                              openDeleteDialog(event, policy)
                             }
                             size="sm"
                             type="button"
@@ -457,63 +476,65 @@ export function ServiceManagementSection() {
 
         {loadState === "ready" ? (
           <CardFooter>
-            {services.length}{" "}
-            {services.length === 1 ? "managed service" : "managed services"}
+            {policies.length}{" "}
+            {policies.length === 1
+              ? "escalation policy"
+              : "escalation policies"}
           </CardFooter>
         ) : null}
       </Card>
 
-      {serviceForm?.mode === "create" ? (
-        <ServiceFormDialog
+      {policyForm?.mode === "create" ? (
+        <PolicyFormDialog
           finalFocusRef={formFinalFocusRef}
           mode="create"
-          onOpenChange={setIsServiceFormOpen}
+          onOpenChange={setIsPolicyFormOpen}
           onSubmit={handleCreate}
-          open={isServiceFormOpen}
-          teams={teams}
+          open={isPolicyFormOpen}
+          services={services}
         />
       ) : null}
 
-      {serviceForm?.mode === "edit" ? (
-        <ServiceFormDialog
+      {policyForm?.mode === "edit" ? (
+        <PolicyFormDialog
           finalFocusRef={formFinalFocusRef}
           mode="edit"
-          onOpenChange={setIsServiceFormOpen}
+          onOpenChange={setIsPolicyFormOpen}
           onSubmit={(request) =>
-            handleUpdate(serviceForm.service, request)
+            handleUpdate(policyForm.policy, request)
           }
-          open={isServiceFormOpen}
-          service={serviceForm.service}
-          teams={teams}
+          open={isPolicyFormOpen}
+          policy={policyForm.policy}
+          services={services}
         />
       ) : null}
 
-      {serviceToDelete ? (
-        <DeleteServiceDialog
+      {policyToDelete ? (
+        <DeletePolicyDialog
           finalFocusRef={deleteFinalFocusRef}
           onDelete={handleDelete}
           onOpenChange={setIsDeleteDialogOpen}
           open={isDeleteDialogOpen}
-          service={serviceToDelete}
+          policy={policyToDelete}
         />
       ) : null}
     </>
   )
 }
 
-function ServiceListSkeleton() {
+function PolicyListSkeleton() {
   return (
     <div
-      aria-label="Loading managed services"
+      aria-label="Loading escalation policies"
       aria-live="polite"
       className="flex flex-col gap-3"
       role="status"
     >
-      <span className="sr-only">Loading managed services…</span>
+      <span className="sr-only">Loading escalation policies…</span>
       <Skeleton className="h-8 w-full" />
-      <Skeleton className="h-16 w-full" />
-      <Skeleton className="h-16 w-full" />
-      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-12 w-full" />
+      <Skeleton className="h-12 w-full" />
+      <Skeleton className="h-12 w-full" />
     </div>
   )
 }
