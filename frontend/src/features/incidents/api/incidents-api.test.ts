@@ -4,6 +4,7 @@ import {
   createIncident,
   getIncident,
   listIncidents,
+  transitionIncidentStatus,
   updateIncident,
 } from "@/features/incidents/api/incidents-api"
 
@@ -61,6 +62,7 @@ describe("incidents API", () => {
     getIncident(42, controller.signal)
     createIncident(request)
     updateIncident(42, request)
+    transitionIncidentStatus(42, "ACKNOWLEDGED")
 
     expect(apiClientMocks.get).toHaveBeenCalledWith("/api/incidents/42", {
       signal: controller.signal,
@@ -72,6 +74,10 @@ describe("incidents API", () => {
     expect(apiClientMocks.put).toHaveBeenCalledWith(
       "/api/incidents/42",
       request,
+    )
+    expect(apiClientMocks.put).toHaveBeenCalledWith(
+      "/api/incidents/42/status",
+      { status: "ACKNOWLEDGED" },
     )
   })
 })

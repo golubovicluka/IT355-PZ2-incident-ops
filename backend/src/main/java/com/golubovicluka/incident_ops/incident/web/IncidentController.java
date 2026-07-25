@@ -2,10 +2,12 @@ package com.golubovicluka.incident_ops.incident.web;
 
 import java.util.List;
 
+import com.golubovicluka.incident_ops.incident.application.ChangeIncidentStatus;
 import com.golubovicluka.incident_ops.incident.application.CreateIncident;
 import com.golubovicluka.incident_ops.incident.application.GetIncident;
 import com.golubovicluka.incident_ops.incident.application.ListIncidents;
 import com.golubovicluka.incident_ops.incident.application.UpdateIncident;
+import com.golubovicluka.incident_ops.incident.application.command.ChangeIncidentStatusCommand;
 import com.golubovicluka.incident_ops.incident.application.command.CreateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.command.UpdateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.dto.IncidentDetailView;
@@ -13,6 +15,7 @@ import com.golubovicluka.incident_ops.incident.domain.IncidentCriteria;
 import com.golubovicluka.incident_ops.incident.domain.IncidentPriority;
 import com.golubovicluka.incident_ops.incident.domain.IncidentStatus;
 import com.golubovicluka.incident_ops.incident.web.request.IncidentRequest;
+import com.golubovicluka.incident_ops.incident.web.request.IncidentStatusRequest;
 import com.golubovicluka.incident_ops.incident.web.response.IncidentDetailResponse;
 import com.golubovicluka.incident_ops.incident.web.response.IncidentSummaryResponse;
 import jakarta.validation.Valid;
@@ -36,16 +39,19 @@ public class IncidentController {
 	private final GetIncident getIncident;
 	private final CreateIncident createIncident;
 	private final UpdateIncident updateIncident;
+	private final ChangeIncidentStatus changeIncidentStatus;
 
 	public IncidentController(
 			ListIncidents listIncidents,
 			GetIncident getIncident,
 			CreateIncident createIncident,
-			UpdateIncident updateIncident) {
+			UpdateIncident updateIncident,
+			ChangeIncidentStatus changeIncidentStatus) {
 		this.listIncidents = listIncidents;
 		this.getIncident = getIncident;
 		this.createIncident = createIncident;
 		this.updateIncident = updateIncident;
+		this.changeIncidentStatus = changeIncidentStatus;
 	}
 
 	@GetMapping
@@ -102,5 +108,17 @@ public class IncidentController {
 						request.priority(),
 						request.managedServiceId(),
 						request.assigneeId())));
+	}
+
+	@PutMapping("/{id}/status")
+	IncidentDetailResponse changeStatus(
+			@PathVariable long id,
+			@Valid @RequestBody IncidentStatusRequest request,
+			Authentication authentication) {
+		return IncidentDetailResponse.from(changeIncidentStatus.execute(
+				new ChangeIncidentStatusCommand(
+						id,
+						request.status(),
+						authentication.getName())));
 	}
 }

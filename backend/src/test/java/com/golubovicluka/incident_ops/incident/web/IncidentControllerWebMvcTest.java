@@ -13,11 +13,14 @@ import java.time.Instant;
 import java.util.List;
 
 import com.golubovicluka.incident_ops.incident.application.CreateIncident;
+import com.golubovicluka.incident_ops.incident.application.ChangeIncidentStatus;
 import com.golubovicluka.incident_ops.incident.application.GetIncident;
+import com.golubovicluka.incident_ops.incident.application.IncidentActorNotFoundException;
 import com.golubovicluka.incident_ops.incident.application.IncidentAssigneeNotFoundException;
 import com.golubovicluka.incident_ops.incident.application.IncidentManagedServiceNotFoundException;
 import com.golubovicluka.incident_ops.incident.application.ListIncidents;
 import com.golubovicluka.incident_ops.incident.application.UpdateIncident;
+import com.golubovicluka.incident_ops.incident.application.command.ChangeIncidentStatusCommand;
 import com.golubovicluka.incident_ops.incident.application.command.CreateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.command.UpdateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.dto.IncidentDetailView;
@@ -27,6 +30,7 @@ import com.golubovicluka.incident_ops.incident.domain.IncidentEventKind;
 import com.golubovicluka.incident_ops.incident.domain.IncidentNotFoundException;
 import com.golubovicluka.incident_ops.incident.domain.IncidentPriority;
 import com.golubovicluka.incident_ops.incident.domain.IncidentStatus;
+import com.golubovicluka.incident_ops.incident.domain.InvalidIncidentStatusTransitionException;
 import com.golubovicluka.incident_ops.shared.config.ApplicationClockConfiguration;
 import com.golubovicluka.incident_ops.shared.security.ApiAccessDeniedHandler;
 import com.golubovicluka.incident_ops.shared.security.ApiAuthenticationEntryPoint;
@@ -66,6 +70,9 @@ class IncidentControllerWebMvcTest {
 
 	@MockitoBean
 	private CreateIncident createIncident;
+
+	@MockitoBean
+	private ChangeIncidentStatus changeIncidentStatus;
 
 	@MockitoBean
 	private GetIncident getIncident;
@@ -189,6 +196,97 @@ class IncidentControllerWebMvcTest {
 
 	@Test
 	@WithMockUser(username = "responder", roles = "RESPONDER")
+	void changesStatusUsingAuthenticatedActorAndReturnsTimelineDetails()
+			throws Exception {
+		ChangeIncidentStatusCommand command = new ChangeIncidentStatusCommand(
+				42L,
+				IncidentStatus.ACKNOWLEDGED,
+				"responder");
+		given(changeIncidentStatus.execute(command))
+				.willReturn(acknowledgedDetail());
+
+		mockMvc.perform(put("/api/incidents/42/status")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "status": "ACKNOWLEDGED",
+								  "actorUsername": "attacker"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("ACKNOWLEDGED"))
+				.andExpect(jsonPath("$.acknowledgedAt")
+						.value("2026-07-25T08:20:30Z"))
+				.andExpect(jsonPath("$.resolvedAt").doesNotExist())
+				.andExpect(jsonPath("$.allowedTransitions[0]")
+						.value("INVESTIGATING"))
+				.andExpect(jsonPath("$.timeline[1].kind")
+						.value("STATUS_CHANGED"))
+				.andExpect(jsonPath("$.timeline[1].previousStatus")
+						.value("OPEN"))
+				.andExpect(jsonPath("$.timeline[1].newStatus")
+						.value("ACKNOWLEDGED"))
+				.andExpect(jsonPath("$.timeline[1].actor.username")
+						.value("responder"));
+
+		verify(changeIncidentStatus).execute(command);
+	}
+
+	@Test
+	@WithMockUser(username = "responder", roles = "RESPONDER")
+	void rejectsInvalidStatusTransitionWithStableConflict() throws Exception {
+		ChangeIncidentStatusCommand command = new ChangeIncidentStatusCommand(
+				42L,
+				IncidentStatus.CLOSED,
+				"responder");
+		given(changeIncidentStatus.execute(command))
+				.willThrow(new InvalidIncidentStatusTransitionException(
+						IncidentStatus.OPEN,
+						IncidentStatus.CLOSED));
+
+		mockMvc.perform(put("/api/incidents/42/status")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"status": "CLOSED"}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.message").value(
+						"Incident status cannot transition from OPEN to CLOSED"))
+				.andExpect(jsonPath("$.path")
+						.value("/api/incidents/42/status"));
+	}
+
+	@Test
+	@WithMockUser(username = "missing", roles = "RESPONDER")
+	void validatesStatusRequestAndAuthenticatedActor() throws Exception {
+		mockMvc.perform(put("/api/incidents/42/status")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"status": null}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.fieldErrors.status")
+						.value("Incident status is required"));
+
+		ChangeIncidentStatusCommand command = new ChangeIncidentStatusCommand(
+				42L,
+				IncidentStatus.ACKNOWLEDGED,
+				"missing");
+		given(changeIncidentStatus.execute(command))
+				.willThrow(new IncidentActorNotFoundException());
+
+		mockMvc.perform(put("/api/incidents/42/status")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"status": "ACKNOWLEDGED"}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message")
+						.value("Authenticated incident actor does not exist"));
+	}
+
+	@Test
+	@WithMockUser(username = "responder", roles = "RESPONDER")
 	void validatesCreateAndUpdateRequests() throws Exception {
 		mockMvc.perform(post("/api/incidents")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -304,6 +402,12 @@ class IncidentControllerWebMvcTest {
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(request("Checkout failures", 7, "null")))
 				.andExpect(status().isUnauthorized());
+		mockMvc.perform(put("/api/incidents/42/status")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"status": "ACKNOWLEDGED"}
+								"""))
+				.andExpect(status().isUnauthorized());
 	}
 
 	private IncidentSummaryView summary() {
@@ -337,11 +441,55 @@ class IncidentControllerWebMvcTest {
 				new IncidentDetailView.UserView(12L, "ana", "Ana Anić"),
 				CREATED_AT,
 				CREATED_AT,
+				null,
+				null,
+				List.of(IncidentStatus.ACKNOWLEDGED, IncidentStatus.INVESTIGATING),
 				List.of(new IncidentDetailView.EventView(
 						99L,
 						IncidentEventKind.CREATED,
 						reporter,
+						null,
+						null,
 						CREATED_AT)));
+	}
+
+	private IncidentDetailView acknowledgedDetail() {
+		IncidentDetailView.UserView reporter =
+				new IncidentDetailView.UserView(
+						11L,
+						"responder",
+						"Response Engineer");
+		Instant acknowledgedAt = CREATED_AT.plusSeconds(300);
+		return new IncidentDetailView(
+				42L,
+				"INC-20260725-AB12CD34",
+				"Checkout failures",
+				"Card payments are timing out.",
+				IncidentPriority.SEV1,
+				IncidentStatus.ACKNOWLEDGED,
+				new IncidentDetailView.ManagedServiceView(7L, "Payments API"),
+				reporter,
+				new IncidentDetailView.UserView(12L, "ana", "Ana Anić"),
+				CREATED_AT,
+				acknowledgedAt,
+				acknowledgedAt,
+				null,
+				List.of(IncidentStatus.INVESTIGATING),
+				List.of(
+						new IncidentDetailView.EventView(
+								99L,
+								IncidentEventKind.CREATED,
+								reporter,
+								null,
+								null,
+								CREATED_AT),
+						new IncidentDetailView.EventView(
+								100L,
+								IncidentEventKind.STATUS_CHANGED,
+								reporter,
+								IncidentStatus.OPEN,
+								IncidentStatus.ACKNOWLEDGED,
+								acknowledgedAt)));
 	}
 
 	private String request(String title, long serviceId, String assigneeId) {

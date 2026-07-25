@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   getIncident,
+  transitionIncidentStatus,
   updateIncident,
 } from "@/features/incidents/api/incidents-api"
 import { IncidentDetailPanel } from "@/features/incidents/components/IncidentDetailPanel"
@@ -16,6 +17,7 @@ import {
 
 vi.mock("@/features/incidents/api/incidents-api", () => ({
   getIncident: vi.fn(),
+  transitionIncidentStatus: vi.fn(),
   updateIncident: vi.fn(),
 }))
 
@@ -25,6 +27,7 @@ vi.mock("@/shared/catalogs/catalog-api", () => ({
 }))
 
 const mockGetIncident = vi.mocked(getIncident)
+const mockTransitionIncidentStatus = vi.mocked(transitionIncidentStatus)
 const mockUpdateIncident = vi.mocked(updateIncident)
 const mockListServices = vi.mocked(listServiceCatalog)
 const mockListUsers = vi.mocked(listAssignableUserCatalog)
@@ -52,6 +55,9 @@ const incident: IncidentDetail = {
   },
   createdAt: "2026-07-25T08:15:30Z",
   updatedAt: "2026-07-25T08:15:30Z",
+  acknowledgedAt: null,
+  resolvedAt: null,
+  allowedTransitions: ["ACKNOWLEDGED", "INVESTIGATING"],
   timeline: [
     {
       id: 91,
@@ -61,6 +67,8 @@ const incident: IncidentDetail = {
         username: "luka",
         displayName: "Luka Golubović",
       },
+      previousStatus: null,
+      newStatus: null,
       occurredAt: "2026-07-25T08:15:30Z",
     },
   ],
@@ -173,5 +181,108 @@ describe("IncidentDetailPanel", () => {
     expect(title).toHaveValue("Checkout failures across Europe")
     expect(screen.getByText(incident.title)).toBeInTheDocument()
     expect(screen.getByText("Incident created")).toBeInTheDocument()
+  })
+
+  it("shows only server-allowed status actions and replaces detail after success", async () => {
+    const user = userEvent.setup()
+    const transitioned: IncidentDetail = {
+      ...incident,
+      status: "ACKNOWLEDGED",
+      updatedAt: "2026-07-25T08:20:30Z",
+      acknowledgedAt: "2026-07-25T08:20:30Z",
+      allowedTransitions: ["INVESTIGATING"],
+      timeline: [
+        ...incident.timeline,
+        {
+          id: 92,
+          kind: "STATUS_CHANGED",
+          actor: incident.reporter,
+          previousStatus: "OPEN",
+          newStatus: "ACKNOWLEDGED",
+          occurredAt: "2026-07-25T08:20:30Z",
+        },
+      ],
+    }
+    mockTransitionIncidentStatus.mockResolvedValue(transitioned)
+    const onUpdated = vi.fn()
+
+    render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={incident}
+        onUpdated={onUpdated}
+      />,
+    )
+
+    expect(
+      screen.getByRole("button", { name: "Acknowledge incident" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Start investigating" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "Resolve incident" }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "Close incident" }),
+    ).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole("button", { name: "Acknowledge incident" }),
+    )
+
+    expect(mockTransitionIncidentStatus).toHaveBeenCalledWith(
+      incident.id,
+      "ACKNOWLEDGED",
+    )
+    expect(
+      await screen.findByText("Open → Acknowledged"),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "Acknowledge incident" }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Start investigating" }),
+    ).toBeInTheDocument()
+    expect(onUpdated).toHaveBeenCalledWith(transitioned)
+  })
+
+  it("preserves the current status and timeline after a transition conflict", async () => {
+    const user = userEvent.setup()
+    mockTransitionIncidentStatus.mockRejectedValue(
+      new ApiError({
+        timestamp: "2026-07-25T12:00:00Z",
+        status: 409,
+        error: "Conflict",
+        message: "Incident status cannot transition from OPEN to CLOSED",
+        path: "/api/incidents/42/status",
+        fieldErrors: {},
+      }),
+    )
+    const onUpdated = vi.fn()
+
+    render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={incident}
+        onUpdated={onUpdated}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole("button", { name: "Acknowledge incident" }),
+    )
+
+    expect(
+      await screen.findByText(
+        "Incident status cannot transition from OPEN to CLOSED",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText("Open")).toBeInTheDocument()
+    expect(screen.getByText("Incident created")).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Acknowledge incident" }),
+    ).toBeInTheDocument()
+    expect(onUpdated).not.toHaveBeenCalled()
   })
 })

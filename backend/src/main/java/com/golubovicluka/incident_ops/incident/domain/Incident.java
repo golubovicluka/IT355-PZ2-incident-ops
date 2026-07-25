@@ -1,6 +1,7 @@
 package com.golubovicluka.incident_ops.incident.domain;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,6 +22,8 @@ public final class Incident {
 	private final IncidentUser assignee;
 	private final Instant createdAt;
 	private final Instant updatedAt;
+	private final Instant acknowledgedAt;
+	private final Instant resolvedAt;
 	private final List<IncidentEvent> events;
 
 	public Incident(
@@ -35,6 +38,8 @@ public final class Incident {
 			IncidentUser assignee,
 			Instant createdAt,
 			Instant updatedAt,
+			Instant acknowledgedAt,
+			Instant resolvedAt,
 			List<IncidentEvent> events) {
 		if (id != null && id <= 0) {
 			throw new IllegalArgumentException("incident id must be positive");
@@ -66,6 +71,14 @@ public final class Incident {
 			throw new IllegalArgumentException(
 					"updatedAt must not be before createdAt");
 		}
+		validateLifecycleTimestamps(
+				status,
+				createdAt,
+				updatedAt,
+				acknowledgedAt,
+				resolvedAt);
+		this.acknowledgedAt = acknowledgedAt;
+		this.resolvedAt = resolvedAt;
 		Objects.requireNonNull(events, "events must not be null");
 		if (events.stream().anyMatch(Objects::isNull)) {
 			throw new IllegalArgumentException("events must not contain null");
@@ -94,6 +107,8 @@ public final class Incident {
 				assignee,
 				createdAt,
 				createdAt,
+				null,
+				null,
 				List.of(IncidentEvent.created(reporter, createdAt)));
 	}
 
@@ -116,7 +131,58 @@ public final class Incident {
 				assignee,
 				createdAt,
 				updatedAt,
+				acknowledgedAt,
+				resolvedAt,
 				events);
+	}
+
+	public Incident transitionTo(
+			IncidentStatus nextStatus,
+			IncidentUser actor,
+			Instant transitionedAt) {
+		Objects.requireNonNull(nextStatus, "nextStatus must not be null");
+		Objects.requireNonNull(actor, "actor must not be null");
+		Objects.requireNonNull(
+				transitionedAt,
+				"transitionedAt must not be null");
+		if (!status.allowedTransitions().contains(nextStatus)) {
+			throw new InvalidIncidentStatusTransitionException(
+					status,
+					nextStatus);
+		}
+		if (transitionedAt.isBefore(updatedAt)) {
+			throw new IllegalArgumentException(
+					"transitionedAt must not be before updatedAt");
+		}
+
+		Instant nextAcknowledgedAt =
+				status == IncidentStatus.OPEN ? transitionedAt : acknowledgedAt;
+		Instant nextResolvedAt = switch (nextStatus) {
+			case RESOLVED -> transitionedAt;
+			case INVESTIGATING -> null;
+			default -> resolvedAt;
+		};
+		List<IncidentEvent> transitionedEvents = new ArrayList<>(events);
+		transitionedEvents.add(IncidentEvent.statusChanged(
+				actor,
+				status,
+				nextStatus,
+				transitionedAt));
+		return new Incident(
+				id,
+				referenceCode,
+				title,
+				description,
+				priority,
+				nextStatus,
+				managedService,
+				reporter,
+				assignee,
+				createdAt,
+				transitionedAt,
+				nextAcknowledgedAt,
+				nextResolvedAt,
+				transitionedEvents);
 	}
 
 	public Long id() {
@@ -163,8 +229,60 @@ public final class Incident {
 		return updatedAt;
 	}
 
+	public Instant acknowledgedAt() {
+		return acknowledgedAt;
+	}
+
+	public Instant resolvedAt() {
+		return resolvedAt;
+	}
+
+	public List<IncidentStatus> allowedTransitions() {
+		return status.allowedTransitions();
+	}
+
 	public List<IncidentEvent> events() {
 		return events;
+	}
+
+	private static void validateLifecycleTimestamps(
+			IncidentStatus status,
+			Instant createdAt,
+			Instant updatedAt,
+			Instant acknowledgedAt,
+			Instant resolvedAt) {
+		if (acknowledgedAt != null
+				&& (acknowledgedAt.isBefore(createdAt)
+				|| acknowledgedAt.isAfter(updatedAt))) {
+			throw new IllegalArgumentException(
+					"acknowledgedAt must be within the incident lifetime");
+		}
+		if (resolvedAt != null
+				&& (resolvedAt.isBefore(createdAt)
+				|| resolvedAt.isAfter(updatedAt))) {
+			throw new IllegalArgumentException(
+					"resolvedAt must be within the incident lifetime");
+		}
+		switch (status) {
+			case OPEN -> {
+				if (acknowledgedAt != null || resolvedAt != null) {
+					throw new IllegalArgumentException(
+							"open incident cannot have lifecycle timestamps");
+				}
+			}
+			case ACKNOWLEDGED, INVESTIGATING -> {
+				if (acknowledgedAt == null || resolvedAt != null) {
+					throw new IllegalArgumentException(
+							"active incident must be acknowledged and unresolved");
+				}
+			}
+			case RESOLVED, CLOSED -> {
+				if (acknowledgedAt == null || resolvedAt == null) {
+					throw new IllegalArgumentException(
+							"resolved incident must have lifecycle timestamps");
+				}
+			}
+		}
 	}
 
 	private static String requireText(

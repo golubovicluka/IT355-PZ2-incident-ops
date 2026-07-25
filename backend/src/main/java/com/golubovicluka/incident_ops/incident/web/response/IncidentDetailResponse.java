@@ -20,9 +20,13 @@ public record IncidentDetailResponse(
 		UserResponse assignee,
 		Instant createdAt,
 		Instant updatedAt,
+		Instant acknowledgedAt,
+		Instant resolvedAt,
+		List<IncidentStatus> allowedTransitions,
 		List<EventResponse> timeline) {
 
 	public IncidentDetailResponse {
+		allowedTransitions = List.copyOf(allowedTransitions);
 		timeline = List.copyOf(timeline);
 	}
 
@@ -41,6 +45,9 @@ public record IncidentDetailResponse(
 				UserResponse.from(incident.assignee()),
 				incident.createdAt(),
 				incident.updatedAt(),
+				incident.acknowledgedAt(),
+				incident.resolvedAt(),
+				incident.allowedTransitions(),
 				incident.timeline().stream().map(EventResponse::from).toList());
 	}
 
@@ -63,6 +70,8 @@ public record IncidentDetailResponse(
 			Long id,
 			IncidentEventKind kind,
 			UserResponse actor,
+			IncidentStatus previousStatus,
+			IncidentStatus newStatus,
 			Instant occurredAt) {
 
 		static EventResponse from(IncidentDetailView.EventView event) {
@@ -70,6 +79,8 @@ public record IncidentDetailResponse(
 					event.id(),
 					event.kind(),
 					UserResponse.from(event.actor()),
+					event.previousStatus(),
+					event.newStatus(),
 					event.occurredAt());
 		}
 	}

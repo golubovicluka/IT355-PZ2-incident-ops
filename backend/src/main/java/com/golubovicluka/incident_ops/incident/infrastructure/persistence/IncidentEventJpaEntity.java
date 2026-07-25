@@ -4,6 +4,7 @@ import java.time.Instant;
 
 import com.golubovicluka.incident_ops.identity.infrastructure.persistence.UserAccountJpaEntity;
 import com.golubovicluka.incident_ops.incident.domain.IncidentEventKind;
+import com.golubovicluka.incident_ops.incident.domain.IncidentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -39,6 +40,14 @@ class IncidentEventJpaEntity {
 	@Column(name = "occurred_at", nullable = false, updatable = false)
 	private Instant occurredAt;
 
+	@Enumerated(EnumType.STRING)
+	@Column(name = "previous_status", updatable = false, length = 32)
+	private IncidentStatus previousStatus;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "new_status", updatable = false, length = 32)
+	private IncidentStatus newStatus;
+
 	protected IncidentEventJpaEntity() {
 	}
 
@@ -46,10 +55,14 @@ class IncidentEventJpaEntity {
 			IncidentJpaEntity incident,
 			IncidentEventKind kind,
 			UserAccountJpaEntity actor,
+			IncidentStatus previousStatus,
+			IncidentStatus newStatus,
 			Instant occurredAt) {
 		this.incident = incident;
 		this.kind = kind;
 		this.actor = actor;
+		this.previousStatus = previousStatus;
+		this.newStatus = newStatus;
 		this.occurredAt = occurredAt;
 	}
 
@@ -63,6 +76,14 @@ class IncidentEventJpaEntity {
 
 	UserAccountJpaEntity getActor() {
 		return actor;
+	}
+
+	IncidentStatus getPreviousStatus() {
+		return previousStatus;
+	}
+
+	IncidentStatus getNewStatus() {
+		return newStatus;
 	}
 
 	Instant getOccurredAt() {

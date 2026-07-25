@@ -85,11 +85,23 @@ public class IncidentPersistenceAdapter implements IncidentRepository {
 				incident.title(),
 				incident.description(),
 				incident.priority(),
+				incident.status(),
 				serviceReference(incident.managedService().id()),
 				incident.assignee() == null
 						? null
 						: userReference(incident.assignee().id()),
-				incident.updatedAt());
+				incident.updatedAt(),
+				incident.acknowledgedAt(),
+				incident.resolvedAt());
+		incident.events().stream()
+				.filter(event -> event.id() == null)
+				.forEach(event -> entity.addEvent(new IncidentEventJpaEntity(
+						entity,
+						event.kind(),
+						userReference(event.actor().id()),
+						event.previousStatus(),
+						event.newStatus(),
+						event.occurredAt())));
 		repository.flush();
 		return mapper.toDomain(entity);
 	}

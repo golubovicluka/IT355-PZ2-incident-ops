@@ -15,6 +15,7 @@ import java.util.Optional;
 
 import com.golubovicluka.incident_ops.identity.application.FindAssignableUser;
 import com.golubovicluka.incident_ops.identity.application.dto.AssignableUserView;
+import com.golubovicluka.incident_ops.incident.application.command.ChangeIncidentStatusCommand;
 import com.golubovicluka.incident_ops.incident.application.command.CreateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.command.UpdateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.dto.IncidentDetailView;
@@ -27,6 +28,7 @@ import com.golubovicluka.incident_ops.incident.domain.IncidentPriority;
 import com.golubovicluka.incident_ops.incident.domain.IncidentRepository;
 import com.golubovicluka.incident_ops.incident.domain.IncidentStatus;
 import com.golubovicluka.incident_ops.incident.domain.IncidentUser;
+import com.golubovicluka.incident_ops.incident.domain.InvalidIncidentStatusTransitionException;
 import com.golubovicluka.incident_ops.servicecatalog.application.FindManagedService;
 import com.golubovicluka.incident_ops.servicecatalog.application.dto.ManagedServiceView;
 import com.golubovicluka.incident_ops.servicecatalog.domain.Criticality;
@@ -56,6 +58,7 @@ class IncidentUseCasesTest {
 	private ReferenceCodeGenerator referenceCodeGenerator;
 
 	private CreateIncident createIncident;
+	private ChangeIncidentStatus changeIncidentStatus;
 	private GetIncident getIncident;
 	private ListIncidents listIncidents;
 	private UpdateIncident updateIncident;
@@ -67,6 +70,10 @@ class IncidentUseCasesTest {
 				findManagedService,
 				findAssignableUser,
 				referenceCodeGenerator,
+				CLOCK);
+		changeIncidentStatus = new ChangeIncidentStatus(
+				incidents,
+				findAssignableUser,
 				CLOCK);
 		getIncident = new GetIncident(incidents);
 		listIncidents = new ListIncidents(incidents);
@@ -230,6 +237,83 @@ class IncidentUseCasesTest {
 	}
 
 	@Test
+	void changesStatusWithAuthenticatedActorAndServerTime() {
+		Incident existing = persistedIncident();
+		when(incidents.findById(42L)).thenReturn(Optional.of(existing));
+		when(findAssignableUser.byUsername("ana"))
+				.thenReturn(Optional.of(assigneeView()));
+		when(incidents.save(any(Incident.class)))
+				.thenAnswer(invocation -> invocation.getArgument(0));
+
+		IncidentDetailView updated = changeIncidentStatus.execute(
+				new ChangeIncidentStatusCommand(
+						42L,
+						IncidentStatus.ACKNOWLEDGED,
+						"ana"));
+
+		assertThat(updated.status()).isEqualTo(IncidentStatus.ACKNOWLEDGED);
+		assertThat(updated.acknowledgedAt()).isEqualTo(NOW);
+		assertThat(updated.resolvedAt()).isNull();
+		assertThat(updated.allowedTransitions())
+				.containsExactly(IncidentStatus.INVESTIGATING);
+		assertThat(updated.timeline().getLast()).satisfies(event -> {
+			assertThat(event.kind())
+					.isEqualTo(com.golubovicluka.incident_ops.incident.domain.IncidentEventKind.STATUS_CHANGED);
+			assertThat(event.actor().username()).isEqualTo("ana");
+			assertThat(event.previousStatus()).isEqualTo(IncidentStatus.OPEN);
+			assertThat(event.newStatus())
+					.isEqualTo(IncidentStatus.ACKNOWLEDGED);
+			assertThat(event.occurredAt()).isEqualTo(NOW);
+		});
+	}
+
+	@Test
+	void rejectedStatusTransitionDoesNotSaveIncident() {
+		Incident existing = persistedIncident();
+		when(incidents.findById(42L)).thenReturn(Optional.of(existing));
+		when(findAssignableUser.byUsername("ana"))
+				.thenReturn(Optional.of(assigneeView()));
+
+		assertThatThrownBy(() -> changeIncidentStatus.execute(
+				new ChangeIncidentStatusCommand(
+						42L,
+						IncidentStatus.CLOSED,
+						"ana")))
+				.isInstanceOf(InvalidIncidentStatusTransitionException.class)
+				.hasMessage(
+						"Incident status cannot transition from OPEN to CLOSED");
+
+		verify(incidents, never()).save(any(Incident.class));
+		assertThat(existing.status()).isEqualTo(IncidentStatus.OPEN);
+		assertThat(existing.events()).hasSize(1);
+	}
+
+	@Test
+	void statusChangeRejectsUnknownIncidentOrAuthenticatedActor() {
+		when(incidents.findById(404L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> changeIncidentStatus.execute(
+				new ChangeIncidentStatusCommand(
+						404L,
+						IncidentStatus.ACKNOWLEDGED,
+						"ana")))
+				.isInstanceOf(IncidentNotFoundException.class);
+
+		when(incidents.findById(42L)).thenReturn(Optional.of(persistedIncident()));
+		when(findAssignableUser.byUsername("missing"))
+				.thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> changeIncidentStatus.execute(
+				new ChangeIncidentStatusCommand(
+						42L,
+						IncidentStatus.ACKNOWLEDGED,
+						"missing")))
+				.isInstanceOf(IncidentActorNotFoundException.class);
+
+		verify(incidents, never()).save(any(Incident.class));
+	}
+
+	@Test
 	void reportsUnknownIncidentForDetailAndUpdate() {
 		when(incidents.findById(404L)).thenReturn(Optional.empty());
 
@@ -260,10 +344,14 @@ class IncidentUseCasesTest {
 				incident.assignee(),
 				incident.createdAt(),
 				incident.updatedAt(),
+				incident.acknowledgedAt(),
+				incident.resolvedAt(),
 				List.of(new IncidentEvent(
 						99L,
 						event.kind(),
 						event.actor(),
+						event.previousStatus(),
+						event.newStatus(),
 						event.occurredAt())));
 	}
 
@@ -282,10 +370,14 @@ class IncidentUseCasesTest {
 				null,
 				NOW.minusSeconds(600),
 				NOW.minusSeconds(600),
+				null,
+				null,
 				List.of(new IncidentEvent(
 						99L,
 						com.golubovicluka.incident_ops.incident.domain.IncidentEventKind.CREATED,
 						reporter,
+						null,
+						null,
 						NOW.minusSeconds(600))));
 	}
 

@@ -27,12 +27,16 @@ final class IncidentPersistenceMapper {
 				reporter,
 				assignee,
 				incident.createdAt(),
-				incident.updatedAt());
+				incident.updatedAt(),
+				incident.acknowledgedAt(),
+				incident.resolvedAt());
 		incident.events().forEach(event -> entity.addEvent(
 				new IncidentEventJpaEntity(
 						entity,
 						event.kind(),
 						userReference.apply(event.actor().id()),
+						event.previousStatus(),
+						event.newStatus(),
 						event.occurredAt())));
 		return entity;
 	}
@@ -51,6 +55,8 @@ final class IncidentPersistenceMapper {
 				toNullableDomain(entity.getAssignee()),
 				entity.getCreatedAt(),
 				entity.getUpdatedAt(),
+				entity.getAcknowledgedAt(),
+				entity.getResolvedAt(),
 				entity.getEvents().stream().map(this::toDomain).toList());
 	}
 
@@ -59,6 +65,8 @@ final class IncidentPersistenceMapper {
 				entity.getId(),
 				entity.getKind(),
 				toDomain(entity.getActor()),
+				entity.getPreviousStatus(),
+				entity.getNewStatus(),
 				entity.getOccurredAt());
 	}
 

@@ -4,11 +4,13 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 
+import com.golubovicluka.incident_ops.incident.application.IncidentActorNotFoundException;
 import com.golubovicluka.incident_ops.incident.application.IncidentAssigneeNotFoundException;
 import com.golubovicluka.incident_ops.incident.application.IncidentManagedServiceNotFoundException;
 import com.golubovicluka.incident_ops.incident.application.IncidentReporterNotFoundException;
 import com.golubovicluka.incident_ops.incident.domain.DuplicateIncidentReferenceCodeException;
 import com.golubovicluka.incident_ops.incident.domain.IncidentNotFoundException;
+import com.golubovicluka.incident_ops.incident.domain.InvalidIncidentStatusTransitionException;
 import com.golubovicluka.incident_ops.shared.web.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -65,6 +67,28 @@ public class IncidentExceptionHandler {
 			HttpServletRequest request) {
 		return response(
 				HttpStatus.FORBIDDEN,
+				exception.getMessage(),
+				request.getRequestURI(),
+				Map.of());
+	}
+
+	@ExceptionHandler(IncidentActorNotFoundException.class)
+	ResponseEntity<ApiErrorResponse> handleMissingActor(
+			IncidentActorNotFoundException exception,
+			HttpServletRequest request) {
+		return response(
+				HttpStatus.FORBIDDEN,
+				exception.getMessage(),
+				request.getRequestURI(),
+				Map.of());
+	}
+
+	@ExceptionHandler(InvalidIncidentStatusTransitionException.class)
+	ResponseEntity<ApiErrorResponse> handleInvalidStatusTransition(
+			InvalidIncidentStatusTransitionException exception,
+			HttpServletRequest request) {
+		return response(
+				HttpStatus.CONFLICT,
 				exception.getMessage(),
 				request.getRequestURI(),
 				Map.of());

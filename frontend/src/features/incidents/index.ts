@@ -2,6 +2,7 @@ export {
   createIncident,
   getIncident,
   listIncidents,
+  transitionIncidentStatus,
   updateIncident,
 } from "./api/incidents-api"
 export { IncidentDetailPanel } from "./components/IncidentDetailPanel"

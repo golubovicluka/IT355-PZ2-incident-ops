@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   getIncident,
+  transitionIncidentStatus,
   updateIncident,
 } from "@/features/incidents/api/incidents-api"
 import { IncidentFormDialog } from "@/features/incidents/components/IncidentFormDialog"
@@ -53,6 +54,27 @@ const eventLabels: Record<IncidentEventKind, string> = {
   STATUS_CHANGED: "Status changed",
   NOTE_ADDED: "Note added",
   ESCALATED: "Incident escalated",
+}
+
+function transitionLabel(
+  currentStatus: IncidentStatus,
+  nextStatus: IncidentStatus,
+) {
+  if (nextStatus === "ACKNOWLEDGED") {
+    return "Acknowledge incident"
+  }
+  if (nextStatus === "INVESTIGATING") {
+    return currentStatus === "RESOLVED"
+      ? "Reopen investigation"
+      : "Start investigating"
+  }
+  if (nextStatus === "RESOLVED") {
+    return "Resolve incident"
+  }
+  if (nextStatus === "CLOSED") {
+    return "Close incident"
+  }
+  return statusLabels[nextStatus]
 }
 
 function priorityVariant(priority: IncidentPriority) {
@@ -94,6 +116,8 @@ export function IncidentDetailPanel({
   const [loadError, setLoadError] = useState<string>()
   const [loadVersion, setLoadVersion] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
+  const [pendingStatus, setPendingStatus] = useState<IncidentStatus>()
+  const [transitionError, setTransitionError] = useState<string>()
   const editButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -141,6 +165,30 @@ export function IncidentDetailPanel({
     onUpdated(updated)
   }
 
+  async function changeStatus(nextStatus: IncidentStatus) {
+    if (pendingStatus) {
+      return
+    }
+
+    setPendingStatus(nextStatus)
+    setTransitionError(undefined)
+    try {
+      const updated = await transitionIncidentStatus(
+        incidentId,
+        nextStatus,
+      )
+      acceptUpdate(updated)
+    } catch (error) {
+      setTransitionError(
+        error instanceof ApiError
+          ? error.message
+          : "The status could not be changed. Try again.",
+      )
+    } finally {
+      setPendingStatus(undefined)
+    }
+  }
+
   if (loadState === "loading") {
     return (
       <Card
@@ -177,6 +225,12 @@ export function IncidentDetailPanel({
       </Alert>
     )
   }
+
+  const orderedTimeline = [...incident.timeline].sort((left, right) => {
+    const occurredAtDifference =
+      Date.parse(left.occurredAt) - Date.parse(right.occurredAt)
+    return occurredAtDifference || left.id - right.id
+  })
 
   return (
     <>
@@ -281,6 +335,50 @@ export function IncidentDetailPanel({
             </div>
           </div>
 
+          <section aria-labelledby={`incident-${incident.id}-status-actions`}>
+            <h3
+              className="text-sm font-medium"
+              id={`incident-${incident.id}-status-actions`}
+            >
+              Status actions
+            </h3>
+            {incident.allowedTransitions.length > 0 ? (
+              <>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose a valid next step for this incident.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {incident.allowedTransitions.map((nextStatus) => (
+                    <Button
+                      disabled={pendingStatus !== undefined}
+                      key={nextStatus}
+                      onClick={() => void changeStatus(nextStatus)}
+                      size="sm"
+                      variant={
+                        nextStatus === "CLOSED" ? "outline" : "default"
+                      }
+                    >
+                      {pendingStatus === nextStatus
+                        ? "Updating…"
+                        : transitionLabel(incident.status, nextStatus)}
+                    </Button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">
+                This incident has no further status actions.
+              </p>
+            )}
+            {transitionError ? (
+              <Alert className="mt-3" variant="destructive">
+                <AlertTriangleIcon />
+                <AlertTitle>Status unchanged</AlertTitle>
+                <AlertDescription>{transitionError}</AlertDescription>
+              </Alert>
+            ) : null}
+          </section>
+
           <Separator />
 
           <section aria-labelledby={`incident-${incident.id}-timeline`}>
@@ -297,7 +395,7 @@ export function IncidentDetailPanel({
               aria-label="Incident timeline"
               className="mt-4 space-y-4 border-l pl-4"
             >
-              {incident.timeline.map((entry) => (
+              {orderedTimeline.map((entry) => (
                 <li className="relative" key={entry.id}>
                   <span className="absolute top-1.5 -left-[1.31rem] size-2 rounded-full bg-primary ring-4 ring-card" />
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -305,6 +403,14 @@ export function IncidentDetailPanel({
                       <p className="font-medium">
                         {eventLabels[entry.kind]}
                       </p>
+                      {entry.kind === "STATUS_CHANGED" &&
+                      entry.previousStatus &&
+                      entry.newStatus ? (
+                        <p className="mt-1 text-sm">
+                          {statusLabels[entry.previousStatus]} →{" "}
+                          {statusLabels[entry.newStatus]}
+                        </p>
+                      ) : null}
                       <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
                         <UserRoundIcon className="size-3.5" />
                         {entry.kind === "CREATED"

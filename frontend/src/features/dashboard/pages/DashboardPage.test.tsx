@@ -97,6 +97,9 @@ const createdIncident: IncidentDetail = {
     username: "luka",
     displayName: "Luka Golubović",
   },
+  acknowledgedAt: null,
+  resolvedAt: null,
+  allowedTransitions: ["ACKNOWLEDGED", "INVESTIGATING"],
   timeline: [
     {
       id: 100,
@@ -106,6 +109,8 @@ const createdIncident: IncidentDetail = {
         username: "luka",
         displayName: "Luka Golubović",
       },
+      previousStatus: null,
+      newStatus: null,
       occurredAt: "2026-07-25T09:00:00Z",
     },
   ],

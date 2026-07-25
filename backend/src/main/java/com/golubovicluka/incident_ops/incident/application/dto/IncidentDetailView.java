@@ -22,9 +22,13 @@ public record IncidentDetailView(
 		UserView assignee,
 		Instant createdAt,
 		Instant updatedAt,
+		Instant acknowledgedAt,
+		Instant resolvedAt,
+		List<IncidentStatus> allowedTransitions,
 		List<EventView> timeline) {
 
 	public IncidentDetailView {
+		allowedTransitions = List.copyOf(allowedTransitions);
 		timeline = List.copyOf(timeline);
 	}
 
@@ -43,6 +47,9 @@ public record IncidentDetailView(
 				UserView.from(incident.assignee()),
 				incident.createdAt(),
 				incident.updatedAt(),
+				incident.acknowledgedAt(),
+				incident.resolvedAt(),
+				incident.allowedTransitions(),
 				incident.events().stream().map(EventView::from).toList());
 	}
 
@@ -62,6 +69,8 @@ public record IncidentDetailView(
 			Long id,
 			IncidentEventKind kind,
 			UserView actor,
+			IncidentStatus previousStatus,
+			IncidentStatus newStatus,
 			Instant occurredAt) {
 
 		static EventView from(IncidentEvent event) {
@@ -69,6 +78,8 @@ public record IncidentDetailView(
 					event.id(),
 					event.kind(),
 					UserView.from(event.actor()),
+					event.previousStatus(),
+					event.newStatus(),
 					event.occurredAt());
 		}
 	}

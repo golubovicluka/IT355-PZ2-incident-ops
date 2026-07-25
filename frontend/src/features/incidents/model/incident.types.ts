@@ -57,12 +57,17 @@ export interface IncidentTimelineEntry {
   id: number
   kind: IncidentEventKind
   actor: IncidentUser
+  previousStatus: IncidentStatus | null
+  newStatus: IncidentStatus | null
   occurredAt: string
 }
 
 export interface IncidentDetail extends IncidentSummary {
   description: string
   reporter: IncidentUser
+  acknowledgedAt: string | null
+  resolvedAt: string | null
+  allowedTransitions: IncidentStatus[]
   timeline: IncidentTimelineEntry[]
 }
 

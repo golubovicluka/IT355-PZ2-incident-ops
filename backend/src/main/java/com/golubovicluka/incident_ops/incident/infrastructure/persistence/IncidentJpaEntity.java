@@ -77,6 +77,12 @@ public class IncidentJpaEntity {
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
 
+	@Column(name = "acknowledged_at")
+	private Instant acknowledgedAt;
+
+	@Column(name = "resolved_at")
+	private Instant resolvedAt;
+
 	@OneToMany(
 			mappedBy = "incident",
 			cascade = CascadeType.PERSIST,
@@ -97,7 +103,9 @@ public class IncidentJpaEntity {
 			UserAccountJpaEntity reporter,
 			UserAccountJpaEntity assignee,
 			Instant createdAt,
-			Instant updatedAt) {
+			Instant updatedAt,
+			Instant acknowledgedAt,
+			Instant resolvedAt) {
 		this.referenceCode = referenceCode;
 		this.title = title;
 		this.description = description;
@@ -108,6 +116,8 @@ public class IncidentJpaEntity {
 		this.assignee = assignee;
 		this.createdAt = createdAt;
 		this.updatedAt = updatedAt;
+		this.acknowledgedAt = acknowledgedAt;
+		this.resolvedAt = resolvedAt;
 	}
 
 	void addEvent(IncidentEventJpaEntity event) {
@@ -118,15 +128,21 @@ public class IncidentJpaEntity {
 			String title,
 			String description,
 			IncidentPriority priority,
+			IncidentStatus status,
 			ManagedServiceJpaEntity managedService,
 			UserAccountJpaEntity assignee,
-			Instant updatedAt) {
+			Instant updatedAt,
+			Instant acknowledgedAt,
+			Instant resolvedAt) {
 		this.title = title;
 		this.description = description;
 		this.priority = priority;
+		this.status = status;
 		this.managedService = managedService;
 		this.assignee = assignee;
 		this.updatedAt = updatedAt;
+		this.acknowledgedAt = acknowledgedAt;
+		this.resolvedAt = resolvedAt;
 	}
 
 	public Long getId() {
@@ -171,6 +187,14 @@ public class IncidentJpaEntity {
 
 	Instant getUpdatedAt() {
 		return updatedAt;
+	}
+
+	Instant getAcknowledgedAt() {
+		return acknowledgedAt;
+	}
+
+	Instant getResolvedAt() {
+		return resolvedAt;
 	}
 
 	List<IncidentEventJpaEntity> getEvents() {

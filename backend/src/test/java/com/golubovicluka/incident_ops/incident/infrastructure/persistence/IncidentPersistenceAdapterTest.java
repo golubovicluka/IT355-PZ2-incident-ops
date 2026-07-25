@@ -208,6 +208,42 @@ class IncidentPersistenceAdapterTest extends PostgreSQLContainerSupport {
 	}
 
 	@Test
+	void persistsLifecycleTimestampsAndImmutableStatusEvent() {
+		Incident saved = incidents.save(incident(
+				"INC-20260725-STATUS",
+				"Lifecycle incident",
+				IncidentPriority.SEV1,
+				IncidentStatus.OPEN,
+				payments,
+				assignee,
+				BASE_TIME));
+		Instant transitionedAt = BASE_TIME.plusSeconds(300);
+
+		Incident transitioned = incidents.save(saved.transitionTo(
+				IncidentStatus.INVESTIGATING,
+				toUser(assignee),
+				transitionedAt));
+		entityManager.clear();
+
+		Incident loaded = incidents.findById(transitioned.id()).orElseThrow();
+		assertThat(loaded.status()).isEqualTo(IncidentStatus.INVESTIGATING);
+		assertThat(loaded.acknowledgedAt()).isEqualTo(transitionedAt);
+		assertThat(loaded.resolvedAt()).isNull();
+		assertThat(loaded.updatedAt()).isEqualTo(transitionedAt);
+		assertThat(loaded.events()).hasSize(2);
+		assertThat(loaded.events().getLast()).satisfies(event -> {
+			assertThat(event.id()).isNotNull();
+			assertThat(event.kind())
+					.isEqualTo(IncidentEventKind.STATUS_CHANGED);
+			assertThat(event.actor().id()).isEqualTo(assignee.id());
+			assertThat(event.previousStatus()).isEqualTo(IncidentStatus.OPEN);
+			assertThat(event.newStatus())
+					.isEqualTo(IncidentStatus.INVESTIGATING);
+			assertThat(event.occurredAt()).isEqualTo(transitionedAt);
+		});
+	}
+
+	@Test
 	void databaseConstraintRejectsDuplicateReferenceCode() {
 		incidents.save(incident(
 				"INC-20260725-DUPLICATE",
@@ -250,6 +286,13 @@ class IncidentPersistenceAdapterTest extends PostgreSQLContainerSupport {
 				assignedUser == null ? null : toUser(assignedUser),
 				createdAt,
 				createdAt,
+				status == IncidentStatus.OPEN
+						? null
+						: createdAt,
+				status == IncidentStatus.RESOLVED
+						|| status == IncidentStatus.CLOSED
+								? createdAt
+								: null,
 				List.of(IncidentEvent.created(reporterUser, createdAt)));
 	}
 

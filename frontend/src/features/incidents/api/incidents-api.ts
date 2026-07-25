@@ -2,6 +2,7 @@ import type {
   IncidentDetail,
   IncidentFilters,
   IncidentRequest,
+  IncidentStatus,
   IncidentSummary,
 } from "@/features/incidents/model/incident.types"
 import { apiClient } from "@/shared/api/api-client"
@@ -44,4 +45,13 @@ export function createIncident(request: IncidentRequest) {
 
 export function updateIncident(id: number, request: IncidentRequest) {
   return apiClient.put<IncidentDetail>(`${INCIDENTS_PATH}/${id}`, request)
+}
+
+export function transitionIncidentStatus(
+  id: number,
+  status: IncidentStatus,
+) {
+  return apiClient.put<IncidentDetail>(`${INCIDENTS_PATH}/${id}/status`, {
+    status,
+  })
 }
