@@ -49,7 +49,12 @@ export function AuthenticationCard({
           </Link>
         </CardAction>
         <CardTitle>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1
+            className="text-2xl font-semibold tracking-tight"
+            tabIndex={-1}
+          >
+            {title}
+          </h1>
         </CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>

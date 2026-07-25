@@ -718,7 +718,10 @@ export function DashboardPage() {
           <p className="text-sm font-medium text-muted-foreground">
             IncidentOps
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+          <h1
+            className="mt-2 text-3xl font-semibold tracking-tight"
+            tabIndex={-1}
+          >
             Incident queue
           </h1>
           <p className="mt-3 max-w-2xl text-muted-foreground">

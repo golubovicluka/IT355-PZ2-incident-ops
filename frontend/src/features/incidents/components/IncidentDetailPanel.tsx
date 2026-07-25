@@ -142,6 +142,20 @@ export function IncidentDetailPanel({
   const [isDeleting, setIsDeleting] = useState(false)
   const [deletionError, setDeletionError] = useState<string>()
   const editButtonRef = useRef<HTMLButtonElement>(null)
+  const transitionErrorRef = useRef<HTMLDivElement>(null)
+  const deletionErrorRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (transitionError) {
+      window.requestAnimationFrame(() => transitionErrorRef.current?.focus())
+    }
+  }, [transitionError])
+
+  useEffect(() => {
+    if (deletionError) {
+      window.requestAnimationFrame(() => deletionErrorRef.current?.focus())
+    }
+  }, [deletionError])
 
   useEffect(() => {
     if (matchingInitialIncident) {
@@ -350,7 +364,11 @@ export function IncidentDetailPanel({
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     {deletionError ? (
-                      <Alert variant="destructive">
+                      <Alert
+                        ref={deletionErrorRef}
+                        tabIndex={-1}
+                        variant="destructive"
+                      >
                         <AlertTriangleIcon />
                         <AlertTitle>Incident not deleted</AlertTitle>
                         <AlertDescription>{deletionError}</AlertDescription>
@@ -502,7 +520,12 @@ export function IncidentDetailPanel({
               </p>
             )}
             {transitionError ? (
-              <Alert className="mt-3" variant="destructive">
+              <Alert
+                className="mt-3"
+                ref={transitionErrorRef}
+                tabIndex={-1}
+                variant="destructive"
+              >
                 <AlertTriangleIcon />
                 <AlertTitle>Status unchanged</AlertTitle>
                 <AlertDescription>{transitionError}</AlertDescription>

@@ -380,7 +380,7 @@ export function ServiceManagementSection() {
 
           {loadState === "ready" && services.length > 0 ? (
             <div className="rounded-lg border">
-              <Table>
+              <Table containerLabel="Scrollable managed services table">
                 <TableCaption className="sr-only">
                   Managed services in the administrative catalog
                 </TableCaption>

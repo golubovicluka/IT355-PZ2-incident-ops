@@ -327,7 +327,7 @@ export function TeamManagementSection() {
 
           {loadState === "ready" && teams.length > 0 ? (
             <div className="rounded-lg border">
-              <Table>
+              <Table containerLabel="Scrollable teams table">
                 <TableCaption className="sr-only">
                   Teams in the administrative catalog
                 </TableCaption>

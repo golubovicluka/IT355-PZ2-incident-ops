@@ -397,7 +397,7 @@ export function PolicyManagementSection() {
 
           {loadState === "ready" && policies.length > 0 ? (
             <div className="overflow-x-auto rounded-lg border">
-              <Table>
+              <Table containerLabel="Scrollable escalation policies table">
                 <TableCaption className="sr-only">
                   Escalation policies in the administrative catalog
                 </TableCaption>

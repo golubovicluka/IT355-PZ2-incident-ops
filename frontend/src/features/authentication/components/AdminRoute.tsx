@@ -17,7 +17,9 @@ export function AdminRoute() {
       <section className="mx-auto max-w-2xl">
         <Alert variant="destructive">
           <ShieldXIcon />
-          <AlertTitle>Administrator access required</AlertTitle>
+          <AlertTitle>
+            <h1 tabIndex={-1}>Administrator access required</h1>
+          </AlertTitle>
           <AlertDescription>
             <p>
               Your session is still active, but you do not have permission to

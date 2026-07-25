@@ -1,5 +1,11 @@
 import { InfoIcon, UserPlusIcon } from "lucide-react"
-import { useState, type ChangeEvent, type FormEvent } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react"
 
 import {
   Alert,
@@ -26,6 +32,14 @@ export function RegisterForm() {
   const [values, setValues] = useState(INITIAL_VALUES)
   const [errors, setErrors] = useState<FieldErrors<RegisterValues>>({})
   const [isValidated, setIsValidated] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
+  const validationFeedbackRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isValidated) {
+      validationFeedbackRef.current?.focus()
+    }
+  }, [isValidated])
 
   function updateField(field: keyof RegisterValues) {
     return (event: ChangeEvent<HTMLInputElement>) => {
@@ -41,10 +55,23 @@ export function RegisterForm() {
     const nextErrors = validateRegistration(values)
     setErrors(nextErrors)
     setIsValidated(Object.keys(nextErrors).length === 0)
+
+    if (Object.keys(nextErrors).length > 0) {
+      window.requestAnimationFrame(() => {
+        formRef.current
+          ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+          ?.focus()
+      })
+    }
   }
 
   return (
-    <form className="flex flex-col gap-6" noValidate onSubmit={handleSubmit}>
+    <form
+      className="flex flex-col gap-6"
+      noValidate
+      onSubmit={handleSubmit}
+      ref={formRef}
+    >
       <FieldGroup>
         <AuthField
           autoComplete="name"
@@ -96,7 +123,7 @@ export function RegisterForm() {
         </Field>
       </FieldGroup>
       {isValidated ? (
-        <Alert>
+        <Alert ref={validationFeedbackRef} tabIndex={-1}>
           <InfoIcon />
           <AlertTitle>Details are valid</AlertTitle>
           <AlertDescription>

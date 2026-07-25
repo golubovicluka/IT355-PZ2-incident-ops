@@ -1,6 +1,7 @@
 import { Navigate, Outlet, createBrowserRouter } from "react-router-dom"
 
 import App from "@/app/App"
+import { RouteFocusManager } from "@/app/components/RouteFocusManager"
 import { NotFoundPage } from "@/app/pages/NotFoundPage"
 import { AdminPage } from "@/features/administration"
 import {
@@ -21,40 +22,45 @@ export const router = createBrowserRouter([
     ),
     children: [
       {
-        path: "/sign-in",
-        element: <SignInPage />,
-      },
-      {
-        path: "/register",
-        element: <RegisterPage />,
-      },
-      {
-        element: <ProtectedRoute />,
+        element: <RouteFocusManager />,
         children: [
           {
-            path: "/",
-            element: <App />,
+            path: "/sign-in",
+            element: <SignInPage />,
+          },
+          {
+            path: "/register",
+            element: <RegisterPage />,
+          },
+          {
+            element: <ProtectedRoute />,
             children: [
               {
-                index: true,
-                element: <Navigate replace to="/dashboard" />,
-              },
-              {
-                path: "dashboard",
-                element: <DashboardPage />,
-              },
-              {
-                element: <AdminRoute />,
+                path: "/",
+                element: <App />,
                 children: [
                   {
-                    path: "admin",
-                    element: <AdminPage />,
+                    index: true,
+                    element: <Navigate replace to="/dashboard" />,
+                  },
+                  {
+                    path: "dashboard",
+                    element: <DashboardPage />,
+                  },
+                  {
+                    element: <AdminRoute />,
+                    children: [
+                      {
+                        path: "admin",
+                        element: <AdminPage />,
+                      },
+                    ],
+                  },
+                  {
+                    path: "*",
+                    element: <NotFoundPage />,
                   },
                 ],
-              },
-              {
-                path: "*",
-                element: <NotFoundPage />,
               },
             ],
           },

@@ -34,7 +34,10 @@ export function AdminPage() {
             Administrator
           </Badge>
           <CardTitle>
-            <h1 className="text-3xl font-semibold tracking-tight">
+            <h1
+              className="text-3xl font-semibold tracking-tight"
+              tabIndex={-1}
+            >
               Administration
             </h1>
           </CardTitle>
