@@ -9,6 +9,8 @@ public interface UserAccountRepository {
 
 	List<UserAccount> findAll();
 
+	Optional<UserAccount> findById(long id);
+
 	Optional<UserAccount> findByUsername(String username);
 
 	long count();

@@ -22,7 +22,7 @@ import jakarta.persistence.UniqueConstraint;
 @Table(
 		name = "user_accounts",
 		uniqueConstraints = @UniqueConstraint(name = "uk_user_accounts_username", columnNames = "username"))
-class UserAccountJpaEntity {
+public class UserAccountJpaEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -67,15 +67,15 @@ class UserAccountJpaEntity {
 		this.team = team;
 	}
 
-	Long getId() {
+	public Long getId() {
 		return id;
 	}
 
-	String getUsername() {
+	public String getUsername() {
 		return username;
 	}
 
-	String getDisplayName() {
+	public String getDisplayName() {
 		return displayName;
 	}
 

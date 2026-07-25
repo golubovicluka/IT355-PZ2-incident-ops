@@ -11,6 +11,10 @@ interface SpringDataUserAccountRepository extends JpaRepository<UserAccountJpaEn
 	@EntityGraph(attributePaths = {"team", "roles"})
 	List<UserAccountJpaEntity> findAllByOrderByDisplayNameAsc();
 
+	@Override
+	@EntityGraph(attributePaths = {"team", "roles"})
+	Optional<UserAccountJpaEntity> findById(Long id);
+
 	@EntityGraph(attributePaths = {"team", "roles"})
 	Optional<UserAccountJpaEntity> findByUsername(String username);
 

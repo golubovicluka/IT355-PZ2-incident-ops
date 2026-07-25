@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import com.golubovicluka.incident_ops.identity.application.dto.AssignableUserView;
@@ -39,6 +40,25 @@ class ListAssignableUsersTest {
 						11L,
 						"ana",
 						"Ana Anić",
-						new AssignableUserView.TeamView(7L, "Incident Response")));
+				new AssignableUserView.TeamView(7L, "Incident Response")));
+	}
+
+	@Test
+	void findsPasswordFreeAssignmentChoiceByIdOrUsername() {
+		UserAccount account = new UserAccount(
+				11L,
+				"ana",
+				"Ana Anić",
+				"$2a$10$secret",
+				Set.of(Role.RESPONDER),
+				new Team(7L, "Incident Response"));
+		when(users.findById(11L)).thenReturn(Optional.of(account));
+		when(users.findByUsername("ana")).thenReturn(Optional.of(account));
+		FindAssignableUser findAssignableUser = new FindAssignableUser(users);
+
+		assertThat(findAssignableUser.byId(11L))
+				.contains(AssignableUserView.from(account));
+		assertThat(findAssignableUser.byUsername("ana"))
+				.contains(AssignableUserView.from(account));
 	}
 }

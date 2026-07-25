@@ -40,6 +40,11 @@ public class UserAccountPersistenceAdapter implements UserAccountRepository {
 	}
 
 	@Override
+	public Optional<UserAccount> findById(long id) {
+		return users.findById(id).map(mapper::toDomain);
+	}
+
+	@Override
 	public Optional<UserAccount> findByUsername(String username) {
 		return users.findByUsername(username).map(mapper::toDomain);
 	}

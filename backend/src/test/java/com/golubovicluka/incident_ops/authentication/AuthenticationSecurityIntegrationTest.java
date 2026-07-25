@@ -17,6 +17,10 @@ import com.golubovicluka.incident_ops.identity.application.InitializeLocalIdenti
 import com.golubovicluka.incident_ops.identity.domain.UserAccount;
 import com.golubovicluka.incident_ops.identity.domain.UserAccountRepository;
 import com.golubovicluka.incident_ops.integration.PostgreSQLContainerSupport;
+import com.golubovicluka.incident_ops.servicecatalog.domain.Criticality;
+import com.golubovicluka.incident_ops.servicecatalog.domain.ManagedService;
+import com.golubovicluka.incident_ops.servicecatalog.domain.ManagedServiceRepository;
+import com.golubovicluka.incident_ops.servicecatalog.domain.OwningTeam;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -61,6 +65,9 @@ class AuthenticationSecurityIntegrationTest extends PostgreSQLContainerSupport {
 
 	@Autowired
 	private UserAccountRepository users;
+
+	@Autowired
+	private ManagedServiceRepository services;
 
 	@Autowired
 	private JwtDecoder jwtDecoder;
@@ -148,6 +155,43 @@ class AuthenticationSecurityIntegrationTest extends PostgreSQLContainerSupport {
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.subject").value("responder"));
+	}
+
+	@Test
+	void incidentReporterAndCreatedEventActorComeFromJwtSubject()
+			throws Exception {
+		UserAccount responder = users.findByUsername("responder").orElseThrow();
+		ManagedService managedService = services.save(ManagedService.create(
+				"JWT Security Service " + System.nanoTime(),
+				"Verifies incident ownership from the signed subject.",
+				Criticality.HIGH,
+				new OwningTeam(
+						responder.team().id(),
+						responder.team().name())));
+		String token = login("responder", TEST_PASSWORD);
+
+		mockMvc.perform(post("/api/incidents")
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "title": "JWT-owned incident",
+								  "description": "Client ownership fields must be ignored.",
+								  "priority": "SEV2",
+								  "managedServiceId": %d,
+								  "assigneeId": null,
+								  "reporterId": 999999,
+								  "eventActorId": 999998
+								}
+								""".formatted(managedService.id())))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.reporter.id").value(responder.id()))
+				.andExpect(jsonPath("$.reporter.username").value("responder"))
+				.andExpect(jsonPath("$.timeline[0].kind").value("CREATED"))
+				.andExpect(jsonPath("$.timeline[0].actor.id")
+						.value(responder.id()))
+				.andExpect(jsonPath("$.timeline[0].actor.username")
+						.value("responder"));
 	}
 
 	@Test
