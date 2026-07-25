@@ -17,6 +17,10 @@ function validateUsername(username: string) {
     return "Username must contain at least 3 characters."
   }
 
+  if (value.length > 100) {
+    return "Username must not exceed 100 characters."
+  }
+
   if (!USERNAME_PATTERN.test(value)) {
     return "Use letters, numbers, dots, dashes, or underscores only."
   }
@@ -29,6 +33,10 @@ function validatePassword(password: string) {
 
   if (password.length < 8) {
     return "Password must contain at least 8 characters."
+  }
+
+  if (password.length > 200) {
+    return "Password must not exceed 200 characters."
   }
 }
 
@@ -53,8 +61,12 @@ export function validateLogin(values: LoginValues) {
 export function validateRegistration(values: RegisterValues) {
   const errors: FieldErrors<RegisterValues> = {}
 
-  if (values.displayName.trim().length < 2) {
+  const displayName = values.displayName.trim()
+
+  if (displayName.length < 2) {
     errors.displayName = "Enter the name your team will recognize."
+  } else if (displayName.length > 150) {
+    errors.displayName = "Display name must not exceed 150 characters."
   }
 
   const usernameError = validateUsername(values.username)
