@@ -12,7 +12,7 @@ import jakarta.persistence.UniqueConstraint;
 @Table(
 		name = "teams",
 		uniqueConstraints = @UniqueConstraint(name = "uk_teams_name", columnNames = "name"))
-class TeamJpaEntity {
+public class TeamJpaEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,11 +29,11 @@ class TeamJpaEntity {
 		this.name = name;
 	}
 
-	Long getId() {
+	public Long getId() {
 		return id;
 	}
 
-	String getName() {
+	public String getName() {
 		return name;
 	}
 }

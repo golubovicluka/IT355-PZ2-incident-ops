@@ -1,5 +1,6 @@
 package com.golubovicluka.incident_ops.identity.infrastructure.persistence;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.golubovicluka.incident_ops.identity.domain.UserAccount;
@@ -29,6 +30,13 @@ public class UserAccountPersistenceAdapter implements UserAccountRepository {
 		TeamJpaEntity team = teams.findById(teamId)
 				.orElseThrow(() -> new IllegalArgumentException("team does not exist: " + teamId));
 		return mapper.toDomain(users.saveAndFlush(mapper.toJpaEntity(account, team)));
+	}
+
+	@Override
+	public List<UserAccount> findAll() {
+		return users.findAllByOrderByDisplayNameAsc().stream()
+				.map(mapper::toDomain)
+				.toList();
 	}
 
 	@Override
