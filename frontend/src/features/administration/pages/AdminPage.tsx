@@ -1,5 +1,6 @@
 import {
   CatalogueIcon,
+  ServiceIcon,
   ShieldUserIcon,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons"
@@ -14,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { ServiceManagementSection } from "@/features/administration/components/ServiceManagementSection"
 import { TeamManagementSection } from "@/features/administration/components/TeamManagementSection"
 
 export function AdminPage() {
@@ -54,7 +56,7 @@ export function AdminPage() {
               Choose an administrative resource.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-2">
             <a
               className={buttonVariants({
                 className: "w-full justify-start",
@@ -69,10 +71,27 @@ export function AdminPage() {
               />
               Teams
             </a>
+            <a
+              className={buttonVariants({
+                className: "w-full justify-start",
+                variant: "outline",
+              })}
+              href="#services"
+            >
+              <HugeiconsIcon
+                data-icon="inline-start"
+                icon={ServiceIcon}
+                strokeWidth={2}
+              />
+              Managed services
+            </a>
           </CardContent>
         </Card>
 
-        <TeamManagementSection />
+        <div className="flex min-w-0 flex-col gap-6">
+          <TeamManagementSection />
+          <ServiceManagementSection />
+        </div>
       </div>
     </div>
   )
