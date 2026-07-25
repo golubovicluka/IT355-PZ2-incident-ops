@@ -1,7 +1,9 @@
 import type {
+  IncidentDetail,
   IncidentFilters,
+  IncidentRequest,
   IncidentSummary,
-} from "@/features/dashboard/model/incident.types"
+} from "@/features/incidents/model/incident.types"
 import { apiClient } from "@/shared/api/api-client"
 
 const INCIDENTS_PATH = "/api/incidents"
@@ -28,4 +30,18 @@ export function listIncidents(
     : INCIDENTS_PATH
 
   return apiClient.get<IncidentSummary[]>(path, { signal })
+}
+
+export function getIncident(id: number, signal?: AbortSignal) {
+  return apiClient.get<IncidentDetail>(`${INCIDENTS_PATH}/${id}`, {
+    signal,
+  })
+}
+
+export function createIncident(request: IncidentRequest) {
+  return apiClient.post<IncidentDetail>(INCIDENTS_PATH, request)
+}
+
+export function updateIncident(id: number, request: IncidentRequest) {
+  return apiClient.put<IncidentDetail>(`${INCIDENTS_PATH}/${id}`, request)
 }

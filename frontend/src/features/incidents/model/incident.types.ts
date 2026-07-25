@@ -1,0 +1,75 @@
+export const incidentStatuses = [
+  "OPEN",
+  "ACKNOWLEDGED",
+  "INVESTIGATING",
+  "RESOLVED",
+  "CLOSED",
+] as const
+
+export const incidentPriorities = [
+  "SEV1",
+  "SEV2",
+  "SEV3",
+  "SEV4",
+] as const
+
+export const incidentEventKinds = [
+  "CREATED",
+  "STATUS_CHANGED",
+  "NOTE_ADDED",
+  "ESCALATED",
+] as const
+
+export type IncidentStatus = (typeof incidentStatuses)[number]
+export type IncidentPriority = (typeof incidentPriorities)[number]
+export type IncidentEventKind = (typeof incidentEventKinds)[number]
+
+export interface IncidentFilters {
+  status?: IncidentStatus
+  priority?: IncidentPriority
+  serviceId?: number
+}
+
+export interface IncidentUser {
+  id: number
+  username: string
+  displayName: string
+}
+
+export interface IncidentManagedService {
+  id: number
+  name: string
+}
+
+export interface IncidentSummary {
+  id: number
+  referenceCode: string
+  title: string
+  priority: IncidentPriority
+  status: IncidentStatus
+  managedService: IncidentManagedService
+  assignee: IncidentUser | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface IncidentTimelineEntry {
+  id: number
+  kind: IncidentEventKind
+  actor: IncidentUser
+  occurredAt: string
+}
+
+export interface IncidentDetail extends IncidentSummary {
+  description: string
+  reporter: IncidentUser
+  timeline: IncidentTimelineEntry[]
+}
+
+export interface IncidentRequest {
+  title: string
+  description: string
+  priority: IncidentPriority
+  managedServiceId: number
+  assigneeId: number | null
+}

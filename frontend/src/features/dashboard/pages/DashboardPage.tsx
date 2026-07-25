@@ -1,9 +1,16 @@
-import { AlertTriangleIcon, RefreshCwIcon } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import {
+  AlertTriangleIcon,
+  CheckCircle2Icon,
+  PlusIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 
 import {
   Alert,
+  AlertAction,
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert"
@@ -31,15 +38,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { listIncidents } from "@/features/dashboard/api/incidents-api"
 import {
+  createIncident,
+  IncidentDetailPanel,
+  IncidentFormDialog,
   incidentPriorities,
   incidentStatuses,
+  listIncidents,
+  type IncidentDetail,
   type IncidentFilters,
   type IncidentPriority,
   type IncidentStatus,
   type IncidentSummary,
-} from "@/features/dashboard/model/incident.types"
+} from "@/features/incidents"
 import { ApiError } from "@/shared/api/api-error"
 import { listServiceCatalog } from "@/shared/catalogs/catalog-api"
 import type { ManagedServiceCatalogItem } from "@/shared/catalogs/catalog.types"
@@ -105,6 +116,32 @@ function formatCreatedAt(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value))
+}
+
+function toIncidentSummary(incident: IncidentDetail): IncidentSummary {
+  return {
+    id: incident.id,
+    referenceCode: incident.referenceCode,
+    title: incident.title,
+    priority: incident.priority,
+    status: incident.status,
+    managedService: incident.managedService,
+    assignee: incident.assignee,
+    createdAt: incident.createdAt,
+    updatedAt: incident.updatedAt,
+  }
+}
+
+function matchesFilters(
+  incident: IncidentDetail,
+  filters: IncidentFilters,
+) {
+  return (
+    (!filters.status || incident.status === filters.status) &&
+    (!filters.priority || incident.priority === filters.priority) &&
+    (!filters.serviceId ||
+      incident.managedService.id === filters.serviceId)
+  )
 }
 
 function IncidentQueueLoading() {
@@ -393,6 +430,10 @@ export function DashboardPage() {
   const [loadError, setLoadError] = useState<string>()
   const [loadVersion, setLoadVersion] = useState(0)
   const [selectedIncidentId, setSelectedIncidentId] = useState<number>()
+  const [selectedIncident, setSelectedIncident] = useState<IncidentDetail>()
+  const [isCreating, setIsCreating] = useState(false)
+  const [successFeedback, setSuccessFeedback] = useState<string>()
+  const createButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -418,6 +459,12 @@ export function DashboardPage() {
         setSelectedIncidentId((current) =>
           current &&
           incidentResponse.some((incident) => incident.id === current)
+            ? current
+            : undefined,
+        )
+        setSelectedIncident((current) =>
+          current &&
+          incidentResponse.some((incident) => incident.id === current.id)
             ? current
             : undefined,
         )
@@ -458,24 +505,92 @@ export function DashboardPage() {
     setSearchParams(new URLSearchParams(), { replace: true })
   }
 
+  function selectIncident(incident: IncidentSummary) {
+    setSelectedIncidentId(incident.id)
+    setSelectedIncident(undefined)
+  }
+
+  function acceptIncident(incident: IncidentDetail) {
+    setSelectedIncidentId(incident.id)
+    setSelectedIncident(incident)
+    setIncidents((current) => {
+      const remaining = current.filter((item) => item.id !== incident.id)
+
+      if (!matchesFilters(incident, filters)) {
+        return remaining
+      }
+
+      return [toIncidentSummary(incident), ...remaining].sort(
+        (first, second) =>
+          new Date(second.createdAt).getTime() -
+            new Date(first.createdAt).getTime() ||
+          second.id - first.id,
+      )
+    })
+  }
+
+  function acceptCreatedIncident(incident: IncidentDetail) {
+    acceptIncident(incident)
+    setSuccessFeedback(
+      `${incident.referenceCode} was reported successfully.`,
+    )
+  }
+
+  function acceptUpdatedIncident(incident: IncidentDetail) {
+    acceptIncident(incident)
+    setSuccessFeedback(
+      `${incident.referenceCode} was updated successfully.`,
+    )
+  }
+
   const hasFilters = Boolean(
     filters.status || filters.priority || filters.serviceId,
   )
 
   return (
     <section className="min-w-0 space-y-6">
-      <div>
-        <p className="text-sm font-medium text-muted-foreground">
-          IncidentOps
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-          Incident queue
-        </h1>
-        <p className="mt-3 max-w-2xl text-muted-foreground">
-          Review current response work and focus the queue with operational
-          filters.
-        </p>
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">
+            IncidentOps
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            Incident queue
+          </h1>
+          <p className="mt-3 max-w-2xl text-muted-foreground">
+            Review current response work and focus the queue with operational
+            filters.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            setSuccessFeedback(undefined)
+            setIsCreating(true)
+          }}
+          ref={createButtonRef}
+        >
+          <PlusIcon />
+          Report incident
+        </Button>
       </div>
+
+      {successFeedback ? (
+        <Alert>
+          <CheckCircle2Icon />
+          <AlertTitle>Incident saved</AlertTitle>
+          <AlertDescription>{successFeedback}</AlertDescription>
+          <AlertAction>
+            <Button
+              aria-label="Dismiss success message"
+              onClick={() => setSuccessFeedback(undefined)}
+              size="icon-sm"
+              variant="ghost"
+            >
+              <XIcon />
+            </Button>
+          </AlertAction>
+        </Alert>
+      ) : null}
 
       <DashboardFilters
         filters={filters}
@@ -535,10 +650,27 @@ export function DashboardPage() {
       {loadState === "ready" && incidents.length > 0 ? (
         <IncidentQueue
           incidents={incidents}
-          onSelect={(incident) => setSelectedIncidentId(incident.id)}
+          onSelect={selectIncident}
           selectedId={selectedIncidentId}
         />
       ) : null}
+
+      {selectedIncidentId ? (
+        <IncidentDetailPanel
+          incidentId={selectedIncidentId}
+          initialIncident={selectedIncident}
+          onUpdated={acceptUpdatedIncident}
+        />
+      ) : null}
+
+      <IncidentFormDialog
+        finalFocusRef={createButtonRef}
+        mode="create"
+        onOpenChange={setIsCreating}
+        onSubmit={createIncident}
+        onSuccess={acceptCreatedIncident}
+        open={isCreating}
+      />
     </section>
   )
 }

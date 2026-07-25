@@ -3,13 +3,49 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, useLocation } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { listIncidents } from "@/features/dashboard/api/incidents-api"
 import { DashboardPage } from "@/features/dashboard/pages/DashboardPage"
-import type { IncidentSummary } from "@/features/dashboard/model/incident.types"
+import {
+  listIncidents,
+  type IncidentDetail,
+  type IncidentSummary,
+} from "@/features/incidents"
 import { listServiceCatalog } from "@/shared/catalogs/catalog-api"
 import type { ManagedServiceCatalogItem } from "@/shared/catalogs/catalog.types"
 
-vi.mock("@/features/dashboard/api/incidents-api", () => ({
+vi.mock("@/features/incidents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/incidents")>()),
+  IncidentDetailPanel: ({
+    incidentId,
+    initialIncident,
+  }: {
+    incidentId: number
+    initialIncident?: IncidentDetail
+  }) => (
+    <div>
+      Incident detail {incidentId}
+      {initialIncident ? `: ${initialIncident.title}` : ""}
+    </div>
+  ),
+  IncidentFormDialog: ({
+    onOpenChange,
+    onSuccess,
+    open,
+  }: {
+    onOpenChange: (open: boolean) => void
+    onSuccess: (incident: IncidentDetail) => void
+    open: boolean
+  }) =>
+    open ? (
+      <button
+        onClick={() => {
+          onSuccess(createdIncident)
+          onOpenChange(false)
+        }}
+        type="button"
+      >
+        Complete incident report
+      </button>
+    ) : null,
   listIncidents: vi.fn(),
 }))
 
@@ -48,6 +84,31 @@ const incident: IncidentSummary = {
   },
   createdAt: "2026-07-25T08:15:30Z",
   updatedAt: "2026-07-25T08:15:30Z",
+}
+
+const createdIncident: IncidentDetail = {
+  ...incident,
+  id: 99,
+  referenceCode: "INC-20260725-NEWINC99",
+  title: "New checkout incident",
+  description: "Checkout requests fail before payment authorization.",
+  reporter: {
+    id: 11,
+    username: "luka",
+    displayName: "Luka Golubović",
+  },
+  timeline: [
+    {
+      id: 100,
+      kind: "CREATED",
+      actor: {
+        id: 11,
+        username: "luka",
+        displayName: "Luka Golubović",
+      },
+      occurredAt: "2026-07-25T09:00:00Z",
+    },
+  ],
 }
 
 function LocationProbe() {
@@ -172,5 +233,31 @@ describe("DashboardPage", () => {
 
     expect(summary).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByText("Selected")).toBeInTheDocument()
+    expect(screen.getByText("Incident detail 42")).toBeInTheDocument()
+  })
+
+  it("renders the server-returned incident after a successful report", async () => {
+    const user = userEvent.setup()
+    mockListIncidents.mockResolvedValue([])
+
+    renderDashboard()
+    await screen.findByText("No incidents in the queue")
+
+    await user.click(
+      screen.getByRole("button", { name: "Report incident" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Complete incident report" }),
+    )
+
+    expect(
+      screen.getByText("Incident detail 99: New checkout incident"),
+    ).toBeInTheDocument()
+    expect(screen.getByText(createdIncident.referenceCode)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "INC-20260725-NEWINC99 was reported successfully.",
+      ),
+    ).toBeInTheDocument()
   })
 })
