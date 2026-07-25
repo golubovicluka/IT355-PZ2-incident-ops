@@ -24,16 +24,19 @@ public class UpdateIncident {
 	private final FindManagedService findManagedService;
 	private final FindAssignableUser findAssignableUser;
 	private final Clock clock;
+	private final IncidentViewAssembler views;
 
 	public UpdateIncident(
 			IncidentRepository incidents,
 			FindManagedService findManagedService,
 			FindAssignableUser findAssignableUser,
-			Clock clock) {
+			Clock clock,
+			IncidentViewAssembler views) {
 		this.incidents = incidents;
 		this.findManagedService = findManagedService;
 		this.findAssignableUser = findAssignableUser;
 		this.clock = clock;
+		this.views = views;
 	}
 
 	@Transactional
@@ -55,7 +58,7 @@ public class UpdateIncident {
 				new IncidentManagedService(service.id(), service.name()),
 				assignee,
 				Instant.now(clock));
-		return IncidentDetailView.from(incidents.save(updated));
+		return views.detail(incidents.save(updated));
 	}
 
 	private static IncidentUser toIncidentUser(AssignableUserView user) {

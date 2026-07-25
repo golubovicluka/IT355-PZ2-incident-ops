@@ -13,6 +13,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
+import com.golubovicluka.incident_ops.analytics.domain.SlaEvaluation;
 import com.golubovicluka.incident_ops.identity.application.FindAssignableUser;
 import com.golubovicluka.incident_ops.identity.application.dto.AssignableUserView;
 import com.golubovicluka.incident_ops.incident.application.command.AddIncidentNoteCommand;
@@ -64,30 +65,37 @@ class IncidentUseCasesTest {
 	private GetIncident getIncident;
 	private ListIncidents listIncidents;
 	private UpdateIncident updateIncident;
+	private IncidentViewAssembler views;
 
 	@BeforeEach
 	void setUp() {
+		views = new IncidentViewAssembler(incident ->
+				SlaEvaluation.notConfigured());
 		createIncident = new CreateIncident(
 				incidents,
 				findManagedService,
 				findAssignableUser,
 				referenceCodeGenerator,
-				CLOCK);
+				CLOCK,
+				views);
 		addIncidentNote = new AddIncidentNote(
 				incidents,
 				findAssignableUser,
-				CLOCK);
+				CLOCK,
+				views);
 		changeIncidentStatus = new ChangeIncidentStatus(
 				incidents,
 				findAssignableUser,
-				CLOCK);
-		getIncident = new GetIncident(incidents);
-		listIncidents = new ListIncidents(incidents);
+				CLOCK,
+				views);
+		getIncident = new GetIncident(incidents, views);
+		listIncidents = new ListIncidents(incidents, views);
 		updateIncident = new UpdateIncident(
 				incidents,
 				findManagedService,
 				findAssignableUser,
-				CLOCK);
+				CLOCK,
+				views);
 	}
 
 	@Test

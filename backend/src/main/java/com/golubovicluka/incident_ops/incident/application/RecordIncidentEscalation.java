@@ -13,9 +13,13 @@ import org.springframework.stereotype.Service;
 public class RecordIncidentEscalation {
 
 	private final IncidentRepository incidents;
+	private final IncidentViewAssembler views;
 
-	public RecordIncidentEscalation(IncidentRepository incidents) {
+	public RecordIncidentEscalation(
+			IncidentRepository incidents,
+			IncidentViewAssembler views) {
 		this.incidents = incidents;
+		this.views = views;
 	}
 
 	public IncidentDetailView execute(
@@ -31,6 +35,6 @@ public class RecordIncidentEscalation {
 				reason,
 				actor,
 				escalatedAt);
-		return IncidentDetailView.from(incidents.save(escalated));
+		return views.detail(incidents.save(escalated));
 	}
 }

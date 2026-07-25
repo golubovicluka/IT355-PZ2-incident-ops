@@ -12,15 +12,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class ListIncidents {
 
 	private final IncidentRepository incidents;
+	private final IncidentViewAssembler views;
 
-	public ListIncidents(IncidentRepository incidents) {
+	public ListIncidents(
+			IncidentRepository incidents,
+			IncidentViewAssembler views) {
 		this.incidents = incidents;
+		this.views = views;
 	}
 
 	@Transactional(readOnly = true)
 	public List<IncidentSummaryView> execute(IncidentCriteria criteria) {
 		return incidents.findAll(criteria).stream()
-				.map(IncidentSummaryView::from)
+				.map(views::summary)
 				.toList();
 	}
 }

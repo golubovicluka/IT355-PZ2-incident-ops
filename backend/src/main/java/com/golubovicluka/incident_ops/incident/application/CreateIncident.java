@@ -24,18 +24,21 @@ public class CreateIncident {
 	private final FindAssignableUser findAssignableUser;
 	private final ReferenceCodeGenerator referenceCodeGenerator;
 	private final Clock clock;
+	private final IncidentViewAssembler views;
 
 	public CreateIncident(
 			IncidentRepository incidents,
 			FindManagedService findManagedService,
 			FindAssignableUser findAssignableUser,
 			ReferenceCodeGenerator referenceCodeGenerator,
-			Clock clock) {
+			Clock clock,
+			IncidentViewAssembler views) {
 		this.incidents = incidents;
 		this.findManagedService = findManagedService;
 		this.findAssignableUser = findAssignableUser;
 		this.referenceCodeGenerator = referenceCodeGenerator;
 		this.clock = clock;
+		this.views = views;
 	}
 
 	@Transactional
@@ -61,7 +64,7 @@ public class CreateIncident {
 				toIncidentUser(reporter),
 				assignee,
 				now);
-		return IncidentDetailView.from(incidents.save(incident));
+		return views.detail(incidents.save(incident));
 	}
 
 	private static IncidentUser toIncidentUser(AssignableUserView user) {

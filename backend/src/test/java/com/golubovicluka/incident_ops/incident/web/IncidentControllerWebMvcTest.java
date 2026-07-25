@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.List;
 
+import com.golubovicluka.incident_ops.analytics.domain.SlaEvaluation;
+import com.golubovicluka.incident_ops.analytics.domain.SlaPhase;
 import com.golubovicluka.incident_ops.incident.application.AddIncidentNote;
 import com.golubovicluka.incident_ops.incident.application.CreateIncident;
 import com.golubovicluka.incident_ops.incident.application.ChangeIncidentStatus;
@@ -26,6 +28,7 @@ import com.golubovicluka.incident_ops.incident.application.command.ChangeInciden
 import com.golubovicluka.incident_ops.incident.application.command.CreateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.command.UpdateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.dto.IncidentDetailView;
+import com.golubovicluka.incident_ops.incident.application.dto.IncidentSlaView;
 import com.golubovicluka.incident_ops.incident.application.dto.IncidentSummaryView;
 import com.golubovicluka.incident_ops.incident.domain.IncidentCriteria;
 import com.golubovicluka.incident_ops.incident.domain.IncidentEventKind;
@@ -131,7 +134,10 @@ class IncidentControllerWebMvcTest {
 				.andExpect(jsonPath("$.timeline[0].actor.username")
 						.value("responder"))
 				.andExpect(jsonPath("$.timeline[0].occurredAt")
-						.value("2026-07-25T08:15:30Z"));
+						.value("2026-07-25T08:15:30Z"))
+				.andExpect(jsonPath("$.sla.state")
+						.value("NOT_CONFIGURED"))
+				.andExpect(jsonPath("$.sla.deadline").doesNotExist());
 
 		verify(createIncident).execute(command);
 	}
@@ -155,6 +161,12 @@ class IncidentControllerWebMvcTest {
 						.value("INC-20260725-AB12CD34"))
 				.andExpect(jsonPath("$[0].managedService.name")
 						.value("Payments API"))
+				.andExpect(jsonPath("$[0].sla.state")
+						.value("ON_TRACK"))
+				.andExpect(jsonPath("$[0].sla.phase")
+						.value("ACKNOWLEDGEMENT"))
+				.andExpect(jsonPath("$[0].sla.deadline")
+						.value("2026-07-25T08:25:30Z"))
 				.andExpect(jsonPath("$[0].description").doesNotExist())
 				.andExpect(jsonPath("$[0].reporter").doesNotExist())
 				.andExpect(jsonPath("$[0].timeline").doesNotExist());
@@ -504,7 +516,10 @@ class IncidentControllerWebMvcTest {
 				new IncidentSummaryView.ManagedServiceView(7L, "Payments API"),
 				new IncidentSummaryView.UserView(12L, "ana", "Ana Anić"),
 				CREATED_AT,
-				CREATED_AT);
+				CREATED_AT,
+				IncidentSlaView.from(SlaEvaluation.onTrack(
+						SlaPhase.ACKNOWLEDGEMENT,
+						CREATED_AT.plusSeconds(600))));
 	}
 
 	private IncidentDetailView detail() {

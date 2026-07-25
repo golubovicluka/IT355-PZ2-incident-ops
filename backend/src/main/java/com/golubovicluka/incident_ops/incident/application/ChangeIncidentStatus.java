@@ -20,14 +20,17 @@ public class ChangeIncidentStatus {
 	private final IncidentRepository incidents;
 	private final FindAssignableUser findAssignableUser;
 	private final Clock clock;
+	private final IncidentViewAssembler views;
 
 	public ChangeIncidentStatus(
 			IncidentRepository incidents,
 			FindAssignableUser findAssignableUser,
-			Clock clock) {
+			Clock clock,
+			IncidentViewAssembler views) {
 		this.incidents = incidents;
 		this.findAssignableUser = findAssignableUser;
 		this.clock = clock;
+		this.views = views;
 	}
 
 	@Transactional
@@ -42,7 +45,7 @@ public class ChangeIncidentStatus {
 				command.status(),
 				actor,
 				Instant.now(clock));
-		return IncidentDetailView.from(incidents.save(transitioned));
+		return views.detail(incidents.save(transitioned));
 	}
 
 	private static IncidentUser toIncidentUser(AssignableUserView user) {

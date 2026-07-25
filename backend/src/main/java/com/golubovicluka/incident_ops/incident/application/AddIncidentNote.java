@@ -20,14 +20,17 @@ public class AddIncidentNote {
 	private final IncidentRepository incidents;
 	private final FindAssignableUser findAssignableUser;
 	private final Clock clock;
+	private final IncidentViewAssembler views;
 
 	public AddIncidentNote(
 			IncidentRepository incidents,
 			FindAssignableUser findAssignableUser,
-			Clock clock) {
+			Clock clock,
+			IncidentViewAssembler views) {
 		this.incidents = incidents;
 		this.findAssignableUser = findAssignableUser;
 		this.clock = clock;
+		this.views = views;
 	}
 
 	@Transactional
@@ -42,7 +45,7 @@ public class AddIncidentNote {
 				command.note(),
 				actor,
 				Instant.now(clock));
-		return IncidentDetailView.from(incidents.save(noted));
+		return views.detail(incidents.save(noted));
 	}
 
 	private static IncidentUser toIncidentUser(AssignableUserView user) {

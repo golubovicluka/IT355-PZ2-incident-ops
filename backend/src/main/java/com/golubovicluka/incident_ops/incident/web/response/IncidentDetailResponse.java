@@ -24,7 +24,8 @@ public record IncidentDetailResponse(
 		Instant resolvedAt,
 		List<IncidentStatus> allowedTransitions,
 		List<EventResponse> timeline,
-		List<EscalationResponse> escalations) {
+		List<EscalationResponse> escalations,
+		SlaResponse sla) {
 
 	public IncidentDetailResponse {
 		allowedTransitions = List.copyOf(allowedTransitions);
@@ -53,7 +54,8 @@ public record IncidentDetailResponse(
 				incident.timeline().stream().map(EventResponse::from).toList(),
 				incident.escalations().stream()
 						.map(EscalationResponse::from)
-						.toList());
+						.toList(),
+				SlaResponse.from(incident.sla()));
 	}
 
 	public record ManagedServiceResponse(Long id, String name) {
@@ -109,6 +111,17 @@ public record IncidentDetailResponse(
 					escalation.reason(),
 					UserResponse.from(escalation.actor()),
 					escalation.escalatedAt());
+		}
+	}
+
+	public record SlaResponse(
+			com.golubovicluka.incident_ops.analytics.domain.SlaState state,
+			com.golubovicluka.incident_ops.analytics.domain.SlaPhase phase,
+			Instant deadline) {
+
+		static SlaResponse from(
+				com.golubovicluka.incident_ops.incident.application.dto.IncidentSlaView sla) {
+			return new SlaResponse(sla.state(), sla.phase(), sla.deadline());
 		}
 	}
 }

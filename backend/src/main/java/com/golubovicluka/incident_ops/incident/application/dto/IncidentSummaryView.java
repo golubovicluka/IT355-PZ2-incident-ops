@@ -16,9 +16,39 @@ public record IncidentSummaryView(
 		ManagedServiceView managedService,
 		UserView assignee,
 		Instant createdAt,
-		Instant updatedAt) {
+		Instant updatedAt,
+		IncidentSlaView sla) {
+
+	public IncidentSummaryView(
+			Long id,
+			String referenceCode,
+			String title,
+			IncidentPriority priority,
+			IncidentStatus status,
+			ManagedServiceView managedService,
+			UserView assignee,
+			Instant createdAt,
+			Instant updatedAt) {
+		this(
+				id,
+				referenceCode,
+				title,
+				priority,
+				status,
+				managedService,
+				assignee,
+				createdAt,
+				updatedAt,
+				IncidentSlaView.notConfigured());
+	}
 
 	public static IncidentSummaryView from(Incident incident) {
+		return from(incident, IncidentSlaView.notConfigured());
+	}
+
+	public static IncidentSummaryView from(
+			Incident incident,
+			IncidentSlaView sla) {
 		return new IncidentSummaryView(
 				incident.id(),
 				incident.referenceCode(),
@@ -30,7 +60,8 @@ public record IncidentSummaryView(
 						incident.managedService().name()),
 				UserView.from(incident.assignee()),
 				incident.createdAt(),
-				incident.updatedAt());
+				incident.updatedAt(),
+				sla);
 	}
 
 	public record ManagedServiceView(Long id, String name) {

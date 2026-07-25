@@ -26,7 +26,8 @@ public record IncidentDetailView(
 		Instant resolvedAt,
 		List<IncidentStatus> allowedTransitions,
 		List<EventView> timeline,
-		List<EscalationView> escalations) {
+		List<EscalationView> escalations,
+		IncidentSlaView sla) {
 
 	public IncidentDetailView(
 			Long id,
@@ -63,7 +64,45 @@ public record IncidentDetailView(
 				timeline.stream()
 						.filter(event -> event.kind() == IncidentEventKind.ESCALATED)
 						.map(EscalationView::from)
-						.toList());
+						.toList(),
+				IncidentSlaView.notConfigured());
+	}
+
+	public IncidentDetailView(
+			Long id,
+			String referenceCode,
+			String title,
+			String description,
+			IncidentPriority priority,
+			IncidentStatus status,
+			ManagedServiceView managedService,
+			UserView reporter,
+			UserView assignee,
+			Instant createdAt,
+			Instant updatedAt,
+			Instant acknowledgedAt,
+			Instant resolvedAt,
+			List<IncidentStatus> allowedTransitions,
+			List<EventView> timeline,
+			List<EscalationView> escalations) {
+		this(
+				id,
+				referenceCode,
+				title,
+				description,
+				priority,
+				status,
+				managedService,
+				reporter,
+				assignee,
+				createdAt,
+				updatedAt,
+				acknowledgedAt,
+				resolvedAt,
+				allowedTransitions,
+				timeline,
+				escalations,
+				IncidentSlaView.notConfigured());
 	}
 
 	public IncidentDetailView {
@@ -73,6 +112,12 @@ public record IncidentDetailView(
 	}
 
 	public static IncidentDetailView from(Incident incident) {
+		return from(incident, IncidentSlaView.notConfigured());
+	}
+
+	public static IncidentDetailView from(
+			Incident incident,
+			IncidentSlaView sla) {
 		return new IncidentDetailView(
 				incident.id(),
 				incident.referenceCode(),
@@ -90,7 +135,12 @@ public record IncidentDetailView(
 				incident.acknowledgedAt(),
 				incident.resolvedAt(),
 				incident.allowedTransitions(),
-				incident.events().stream().map(EventView::from).toList());
+				incident.events().stream().map(EventView::from).toList(),
+				incident.events().stream()
+						.filter(event -> event.kind() == IncidentEventKind.ESCALATED)
+						.map(event -> EscalationView.from(EventView.from(event)))
+						.toList(),
+				sla);
 	}
 
 	public record ManagedServiceView(Long id, String name) {
