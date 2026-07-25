@@ -81,31 +81,22 @@ class RegisterUserAccountTest {
 	}
 
 	@Test
-	void createsTheRegistrationTeamWhenTheDatabaseIsEmpty() {
-		Team registrationTeam = new Team(7L, RegisterUserAccount.REGISTRATION_TEAM_NAME);
+	void rejectsRegistrationWhenTheConfiguredTeamIsMissing() {
 		when(users.findByUsername("new.responder")).thenReturn(Optional.empty());
 		when(teams.findByName(RegisterUserAccount.REGISTRATION_TEAM_NAME))
 				.thenReturn(Optional.empty());
-		when(teams.save(Team.create(RegisterUserAccount.REGISTRATION_TEAM_NAME)))
-				.thenReturn(registrationTeam);
-		when(passwordHashing.hash("strong-password")).thenReturn("$2a$10$hashedPassword");
-		when(users.save(any(UserAccount.class))).thenAnswer(invocation -> {
-			UserAccount account = invocation.getArgument(0);
-			return new UserAccount(
-					42L,
-					account.username(),
-					account.displayName(),
-					account.passwordHash(),
-					account.roles(),
-					account.team());
-		});
 
-		registerUserAccount.execute(new RegisterUserAccountCommand(
-				"new.responder",
-				"New Response Engineer",
-				"strong-password"));
+		assertThatThrownBy(() -> registerUserAccount.execute(
+				new RegisterUserAccountCommand(
+						"new.responder",
+						"New Response Engineer",
+						"strong-password")))
+				.isInstanceOf(RegistrationUnavailableException.class)
+				.hasMessage("Registration is temporarily unavailable");
 
-		verify(teams).save(Team.create(RegisterUserAccount.REGISTRATION_TEAM_NAME));
+		verify(teams, never()).save(any());
+		verify(passwordHashing, never()).hash(any());
+		verify(users, never()).save(any());
 	}
 
 	@Test

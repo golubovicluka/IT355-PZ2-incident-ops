@@ -132,6 +132,21 @@ describe("RegisterForm", () => {
     )
   })
 
+  it("uses a neutral message for unexpected registration failures", async () => {
+    const user = userEvent.setup()
+    mockRegisterAccount.mockRejectedValue(new TypeError("Failed to fetch"))
+    renderForm()
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole("button", { name: "Register" }))
+
+    expect(
+      await screen.findByText("Registration is unavailable. Try again."),
+    ).toBeInTheDocument()
+    expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument()
+    expect(screen.getByLabelText("Username")).toHaveValue(" New.Responder ")
+  })
+
   it("locks every field and the button while registration is pending", async () => {
     const user = userEvent.setup()
     mockRegisterAccount.mockImplementation(

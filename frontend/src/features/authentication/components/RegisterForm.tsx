@@ -106,11 +106,7 @@ export function RegisterForm() {
             : error.message,
         )
       } else {
-        setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "Registration is unavailable. Try again.",
-        )
+        setSubmitError("Registration is unavailable. Try again.")
       }
     } finally {
       setIsPending(false)

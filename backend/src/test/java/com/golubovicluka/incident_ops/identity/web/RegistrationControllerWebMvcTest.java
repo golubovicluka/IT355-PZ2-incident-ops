@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.Set;
 
 import com.golubovicluka.incident_ops.identity.application.RegisterUserAccount;
+import com.golubovicluka.incident_ops.identity.application.RegistrationUnavailableException;
 import com.golubovicluka.incident_ops.identity.application.UserAccountView;
 import com.golubovicluka.incident_ops.identity.application.command.RegisterUserAccountCommand;
 import com.golubovicluka.incident_ops.identity.domain.DuplicateUsernameException;
@@ -128,5 +129,32 @@ class RegistrationControllerWebMvcTest {
 				.andExpect(jsonPath("$.path").value("/register"))
 				.andExpect(jsonPath("$.fieldErrors.username")
 						.value("Username is already registered"));
+	}
+
+	@Test
+	void unavailableRegistrationTeamReturnsSanitizedServiceUnavailableError() throws Exception {
+		RegisterUserAccountCommand command = new RegisterUserAccountCommand(
+				"new.responder",
+				"New Response Engineer",
+				"strong-password");
+		willThrow(new RegistrationUnavailableException())
+				.given(registerUserAccount)
+				.execute(command);
+
+		mockMvc.perform(post("/register")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "displayName": "New Response Engineer",
+								  "username": "new.responder",
+								  "password": "strong-password"
+								}
+								"""))
+				.andExpect(status().isServiceUnavailable())
+				.andExpect(jsonPath("$.status").value(503))
+				.andExpect(jsonPath("$.message")
+						.value("Registration is temporarily unavailable"))
+				.andExpect(jsonPath("$.path").value("/register"))
+				.andExpect(jsonPath("$.fieldErrors").doesNotExist());
 	}
 }

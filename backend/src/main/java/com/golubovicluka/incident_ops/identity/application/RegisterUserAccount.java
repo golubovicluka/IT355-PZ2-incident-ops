@@ -39,7 +39,7 @@ public class RegisterUserAccount {
 		}
 
 		Team registrationTeam = teams.findByName(REGISTRATION_TEAM_NAME)
-				.orElseGet(() -> teams.save(Team.create(REGISTRATION_TEAM_NAME)));
+				.orElseThrow(RegistrationUnavailableException::new);
 		UserAccount account = UserAccount.create(
 				username,
 				command.displayName(),
