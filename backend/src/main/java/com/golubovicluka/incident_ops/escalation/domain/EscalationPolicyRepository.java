@@ -17,5 +17,11 @@ public interface EscalationPolicyRepository {
 			long managedServiceId,
 			IncidentPriority priority);
 
+	/**
+	 * Deletes an unreferenced policy.
+	 *
+	 * @throws EscalationPolicyInUseException when persisted rule data still
+	 *         references the policy
+	 */
 	void delete(EscalationPolicy policy);
 }

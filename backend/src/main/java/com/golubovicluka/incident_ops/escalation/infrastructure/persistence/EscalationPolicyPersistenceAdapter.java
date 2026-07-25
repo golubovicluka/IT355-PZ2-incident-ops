@@ -74,6 +74,8 @@ public class EscalationPolicyPersistenceAdapter
 	public void delete(EscalationPolicy policy) {
 		try {
 			repository.deleteById(policy.id());
+			// Flush inside this boundary so foreign-key protected rule data
+			// becomes a stable conflict instead of a late transaction failure.
 			repository.flush();
 		} catch (DataIntegrityViolationException exception) {
 			throw new EscalationPolicyInUseException(exception);
