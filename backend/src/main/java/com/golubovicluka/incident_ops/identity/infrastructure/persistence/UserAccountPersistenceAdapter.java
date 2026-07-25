@@ -3,8 +3,10 @@ package com.golubovicluka.incident_ops.identity.infrastructure.persistence;
 import java.util.List;
 import java.util.Optional;
 
+import com.golubovicluka.incident_ops.identity.domain.DuplicateUsernameException;
 import com.golubovicluka.incident_ops.identity.domain.UserAccount;
 import com.golubovicluka.incident_ops.identity.domain.UserAccountRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -29,7 +31,11 @@ public class UserAccountPersistenceAdapter implements UserAccountRepository {
 		}
 		TeamJpaEntity team = teams.findById(teamId)
 				.orElseThrow(() -> new IllegalArgumentException("team does not exist: " + teamId));
-		return mapper.toDomain(users.saveAndFlush(mapper.toJpaEntity(account, team)));
+		try {
+			return mapper.toDomain(users.saveAndFlush(mapper.toJpaEntity(account, team)));
+		} catch (DataIntegrityViolationException exception) {
+			throw new DuplicateUsernameException(exception);
+		}
 	}
 
 	@Override

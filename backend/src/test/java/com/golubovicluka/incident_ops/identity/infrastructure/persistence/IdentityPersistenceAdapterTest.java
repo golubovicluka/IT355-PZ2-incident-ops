@@ -5,8 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Set;
 
-import com.golubovicluka.incident_ops.identity.domain.Role;
 import com.golubovicluka.incident_ops.identity.domain.DuplicateTeamNameException;
+import com.golubovicluka.incident_ops.identity.domain.DuplicateUsernameException;
+import com.golubovicluka.incident_ops.identity.domain.Role;
 import com.golubovicluka.incident_ops.identity.domain.Team;
 import com.golubovicluka.incident_ops.identity.domain.TeamRepository;
 import com.golubovicluka.incident_ops.identity.domain.UserAccount;
@@ -17,7 +18,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -112,6 +112,6 @@ class IdentityPersistenceAdapterTest extends PostgreSQLContainerSupport {
 				"$2a$10$secondHash",
 				Set.of(Role.RESPONDER),
 				team)))
-				.isInstanceOf(DataIntegrityViolationException.class);
+				.isInstanceOf(DuplicateUsernameException.class);
 	}
 }

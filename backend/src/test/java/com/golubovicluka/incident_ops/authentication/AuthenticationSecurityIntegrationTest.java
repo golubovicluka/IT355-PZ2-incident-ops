@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.golubovicluka.incident_ops.identity.application.InitializeLocalIdentityData;
+import com.golubovicluka.incident_ops.identity.application.PasswordHashing;
+import com.golubovicluka.incident_ops.identity.domain.Role;
 import com.golubovicluka.incident_ops.identity.domain.UserAccount;
 import com.golubovicluka.incident_ops.identity.domain.UserAccountRepository;
 import com.golubovicluka.incident_ops.integration.PostgreSQLContainerSupport;
@@ -66,6 +68,9 @@ class AuthenticationSecurityIntegrationTest extends PostgreSQLContainerSupport {
 	private UserAccountRepository users;
 
 	@Autowired
+	private PasswordHashing passwordHashing;
+
+	@Autowired
 	private ManagedServiceRepository services;
 
 	@Autowired
@@ -109,6 +114,63 @@ class AuthenticationSecurityIntegrationTest extends PostgreSQLContainerSupport {
 				.doesNotContain(TEST_SIGNING_SECRET)
 				.doesNotContain(responder.passwordHash())
 				.doesNotContainIgnoringCase("password");
+	}
+
+	@Test
+	void registeredResponderIsPersistedWithBcryptAndCanLogIn() throws Exception {
+		String plaintextPassword = "new-responder-password";
+
+		MvcResult registration = mockMvc.perform(post("/register")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "displayName": "New Response Engineer",
+								  "username": "New.Responder",
+								  "password": "new-responder-password"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.username").value("new.responder"))
+				.andExpect(jsonPath("$.displayName").value("New Response Engineer"))
+				.andExpect(jsonPath("$.roles[0]").value("RESPONDER"))
+				.andExpect(jsonPath("$.team.name").value("Incident Response"))
+				.andExpect(jsonPath("$.password").doesNotExist())
+				.andExpect(jsonPath("$.passwordHash").doesNotExist())
+				.andReturn();
+
+		UserAccount registered = users.findByUsername("new.responder").orElseThrow();
+		assertThat(registered.roles()).containsExactly(Role.RESPONDER);
+		assertThat(registered.team().name()).isEqualTo("Incident Response");
+		assertThat(registered.passwordHash()).isNotEqualTo(plaintextPassword);
+		assertThat(passwordHashing.matches(plaintextPassword, registered.passwordHash())).isTrue();
+		assertThat(registration.getResponse().getContentAsString())
+				.doesNotContain(plaintextPassword)
+				.doesNotContain(registered.passwordHash());
+
+		mockMvc.perform(post("/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "username": "new.responder",
+								  "password": "new-responder-password"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.username").value("new.responder"))
+				.andExpect(jsonPath("$.roles[0]").value("RESPONDER"));
+
+		mockMvc.perform(post("/register")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "displayName": "Duplicate Response Engineer",
+								  "username": "NEW.RESPONDER",
+								  "password": "another-password"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.fieldErrors.username")
+						.value("Username is already registered"));
 	}
 
 	@Test

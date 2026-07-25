@@ -32,7 +32,7 @@ public class SecurityConfiguration {
 				.cors(Customizer.withDefaults())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(authorize -> authorize
-						.requestMatchers(HttpMethod.POST, "/login").permitAll()
+						.requestMatchers(HttpMethod.POST, "/login", "/register").permitAll()
 						.requestMatchers("/api/admin/**").hasRole("ADMIN")
 						.requestMatchers(HttpMethod.DELETE, "/api/incidents/**").hasRole("ADMIN")
 						.requestMatchers("/api/**").hasAnyRole("RESPONDER", "ADMIN")
