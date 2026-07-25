@@ -21,7 +21,7 @@ import jakarta.persistence.UniqueConstraint;
 		uniqueConstraints = @UniqueConstraint(
 				name = "uk_managed_services_name",
 				columnNames = "name"))
-class ManagedServiceJpaEntity {
+public class ManagedServiceJpaEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -57,11 +57,11 @@ class ManagedServiceJpaEntity {
 		this.owningTeam = owningTeam;
 	}
 
-	Long getId() {
+	public Long getId() {
 		return id;
 	}
 
-	String getName() {
+	public String getName() {
 		return name;
 	}
 
