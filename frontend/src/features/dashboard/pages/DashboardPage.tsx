@@ -1,6 +1,9 @@
 import {
+  ActivityIcon,
   AlertTriangleIcon,
   CheckCircle2Icon,
+  CircleCheckBigIcon,
+  FolderOpenIcon,
   PlusIcon,
   RefreshCwIcon,
   XIcon,
@@ -42,6 +45,7 @@ import {
   createIncident,
   IncidentDetailPanel,
   IncidentFormDialog,
+  IncidentSlaIndicator,
   incidentPriorities,
   incidentStatuses,
   listIncidents,
@@ -51,6 +55,8 @@ import {
   type IncidentStatus,
   type IncidentSummary,
 } from "@/features/incidents"
+import { getOperationalSummary } from "@/features/dashboard/api/analytics-api"
+import type { OperationalSummary } from "@/features/dashboard/model/analytics.types"
 import { ApiError } from "@/shared/api/api-error"
 import { listServiceCatalog } from "@/shared/catalogs/catalog-api"
 import type { ManagedServiceCatalogItem } from "@/shared/catalogs/catalog.types"
@@ -127,6 +133,7 @@ function toIncidentSummary(incident: IncidentDetail): IncidentSummary {
     status: incident.status,
     managedService: incident.managedService,
     assignee: incident.assignee,
+    sla: incident.sla,
     createdAt: incident.createdAt,
     updatedAt: incident.updatedAt,
   }
@@ -158,6 +165,61 @@ function IncidentQueueLoading() {
         <Skeleton className="h-16 w-full" />
       </CardContent>
     </Card>
+  )
+}
+
+function OperationalSummaryCards({
+  summary,
+}: {
+  summary: OperationalSummary
+}) {
+  const counters = [
+    {
+      label: "Open",
+      value: summary.open,
+      icon: FolderOpenIcon,
+    },
+    {
+      label: "Active",
+      value: summary.active,
+      icon: ActivityIcon,
+    },
+    {
+      label: "Resolved",
+      value: summary.resolved,
+      icon: CircleCheckBigIcon,
+    },
+    {
+      label: "SLA breached",
+      value: summary.breached,
+      icon: AlertTriangleIcon,
+    },
+  ]
+
+  return (
+    <section
+      aria-label="Operational summary"
+      className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+    >
+      {counters.map(({ icon: Icon, label, value }) => (
+        <Card key={label} size="sm">
+          <CardContent className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">
+                {label}
+              </p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums">
+                {value}
+              </p>
+            </div>
+            <Icon
+              aria-hidden="true"
+              className="size-5 text-muted-foreground"
+            />
+          </CardContent>
+        </Card>
+      ))}
+    </section>
   )
 }
 
@@ -328,13 +390,14 @@ function IncidentQueue({
       <CardContent className="px-0">
         <div
           aria-hidden="true"
-          className="hidden grid-cols-[minmax(0,1.7fr)_0.65fr_0.9fr_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] gap-3 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground lg:grid"
+          className="hidden grid-cols-[minmax(0,1.6fr)_0.55fr_0.8fr_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-3 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground lg:grid"
         >
           <span>Incident</span>
           <span>Priority</span>
           <span>Status</span>
           <span>Service</span>
           <span>Assignee</span>
+          <span>SLA</span>
           <span>Created</span>
         </div>
         <ol aria-label="Incident summaries">
@@ -344,7 +407,7 @@ function IncidentQueue({
               <li className="border-b last:border-b-0" key={incident.id}>
                 <button
                   aria-pressed={selected}
-                  className="grid w-full min-w-0 gap-4 bg-transparent p-4 text-left text-sm transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 data-[state=selected]:bg-muted lg:grid-cols-[minmax(0,1.7fr)_0.65fr_0.9fr_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center lg:gap-3"
+                  className="grid w-full min-w-0 gap-4 bg-transparent p-4 text-left text-sm transition-colors outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-inset focus-visible:ring-ring/50 data-[state=selected]:bg-muted lg:grid-cols-[minmax(0,1.6fr)_0.55fr_0.8fr_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)] lg:items-center lg:gap-3"
                   data-state={selected ? "selected" : undefined}
                   onClick={() => onSelect(incident)}
                   type="button"
@@ -398,6 +461,12 @@ function IncidentQueue({
                     </span>
                     <span className="min-w-0 sm:col-span-2 lg:col-span-1">
                       <span className="mb-1 block text-xs text-muted-foreground lg:hidden">
+                        SLA
+                      </span>
+                      <IncidentSlaIndicator sla={incident.sla} />
+                    </span>
+                    <span className="min-w-0 sm:col-span-2 lg:col-span-1">
+                      <span className="mb-1 block text-xs text-muted-foreground lg:hidden">
                         Created
                       </span>
                       <time
@@ -426,7 +495,9 @@ export function DashboardPage() {
   )
   const [incidents, setIncidents] = useState<IncidentSummary[]>([])
   const [services, setServices] = useState<ManagedServiceCatalogItem[]>([])
+  const [summary, setSummary] = useState<OperationalSummary>()
   const [loadState, setLoadState] = useState<LoadState>("loading")
+  const [hasCompleteSnapshot, setHasCompleteSnapshot] = useState(false)
   const [loadError, setLoadError] = useState<string>()
   const [loadVersion, setLoadVersion] = useState(0)
   const [selectedIncidentId, setSelectedIncidentId] = useState<number>()
@@ -438,24 +509,26 @@ export function DashboardPage() {
   useEffect(() => {
     const controller = new AbortController()
 
-    async function loadQueue() {
+    async function loadDashboard() {
       setLoadState("loading")
       setLoadError(undefined)
 
-      try {
-        const [incidentResponse, serviceResponse] = await Promise.all([
+      const [incidentResult, serviceResult, summaryResult] =
+        await Promise.allSettled([
           listIncidents(filters, controller.signal),
           listServiceCatalog(controller.signal),
+          getOperationalSummary(controller.signal),
         ])
+
+      if (controller.signal.aborted) {
+        return
+      }
+
+      const errors: unknown[] = []
+
+      if (incidentResult.status === "fulfilled") {
+        const incidentResponse = incidentResult.value
         setIncidents(incidentResponse)
-        setServices(
-          [...serviceResponse].sort(
-            (first, second) =>
-              first.name.localeCompare(second.name, undefined, {
-                sensitivity: "base",
-              }) || first.id - second.id,
-          ),
-        )
         setSelectedIncidentId((current) =>
           current &&
           incidentResponse.some((incident) => incident.id === current)
@@ -468,21 +541,48 @@ export function DashboardPage() {
             ? current
             : undefined,
         )
-        setLoadError(undefined)
-        setLoadState("ready")
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          setLoadError(
-            error instanceof ApiError
-              ? error.message
-              : "The incident queue is unavailable. Try loading it again.",
-          )
-          setLoadState("error")
-        }
+      } else {
+        errors.push(incidentResult.reason)
       }
+
+      if (serviceResult.status === "fulfilled") {
+        const serviceResponse = serviceResult.value
+        setServices(
+          [...serviceResponse].sort(
+            (first, second) =>
+              first.name.localeCompare(second.name, undefined, {
+                sensitivity: "base",
+              }) || first.id - second.id,
+          ),
+        )
+      } else {
+        errors.push(serviceResult.reason)
+      }
+
+      if (summaryResult.status === "fulfilled") {
+        setSummary(summaryResult.value)
+      } else {
+        errors.push(summaryResult.reason)
+      }
+
+      if (errors.length === 0) {
+        setLoadError(undefined)
+        setHasCompleteSnapshot(true)
+        setLoadState("ready")
+        return
+      }
+
+      const apiError = errors.find(
+        (error): error is ApiError => error instanceof ApiError,
+      )
+      setLoadError(
+        apiError?.message ??
+          "Some dashboard data is unavailable. Try loading it again.",
+      )
+      setLoadState("error")
     }
 
-    void loadQueue()
+    void loadDashboard()
     return () => controller.abort()
   }, [filters, loadVersion])
 
@@ -529,8 +629,24 @@ export function DashboardPage() {
     })
   }
 
+  function refreshOperationalSummary() {
+    void getOperationalSummary()
+      .then((currentSummary) => {
+        setSummary(currentSummary)
+      })
+      .catch((error: unknown) => {
+        setLoadError(
+          error instanceof ApiError
+            ? error.message
+            : "The operational summary could not be refreshed.",
+        )
+        setLoadState("error")
+      })
+  }
+
   function acceptCreatedIncident(incident: IncidentDetail) {
     acceptIncident(incident)
+    refreshOperationalSummary()
     setSuccessFeedback(
       `${incident.referenceCode} was reported successfully.`,
     )
@@ -538,6 +654,7 @@ export function DashboardPage() {
 
   function acceptUpdatedIncident(incident: IncidentDetail) {
     acceptIncident(incident)
+    refreshOperationalSummary()
     setSuccessFeedback(
       `${incident.referenceCode} was updated successfully.`,
     )
@@ -599,12 +716,16 @@ export function DashboardPage() {
         services={services}
       />
 
-      {loadState === "loading" ? <IncidentQueueLoading /> : null}
+      {summary ? <OperationalSummaryCards summary={summary} /> : null}
 
       {loadState === "error" ? (
         <Alert variant="destructive">
           <AlertTriangleIcon />
-          <AlertTitle>Unable to load incident queue</AlertTitle>
+          <AlertTitle>
+            {hasCompleteSnapshot
+              ? "Dashboard data may be stale"
+              : "Unable to load incident queue"}
+          </AlertTitle>
           <AlertDescription>
             <p>{loadError}</p>
             <Button
@@ -621,6 +742,16 @@ export function DashboardPage() {
             </Button>
           </AlertDescription>
         </Alert>
+      ) : null}
+
+      {loadState === "loading" && !hasCompleteSnapshot ? (
+        <IncidentQueueLoading />
+      ) : null}
+
+      {loadState === "loading" && hasCompleteSnapshot ? (
+        <p aria-live="polite" className="text-sm text-muted-foreground">
+          Refreshing dashboard data…
+        </p>
       ) : null}
 
       {loadState === "ready" && incidents.length === 0 ? (
@@ -647,7 +778,8 @@ export function DashboardPage() {
         </Empty>
       ) : null}
 
-      {loadState === "ready" && incidents.length > 0 ? (
+      {(loadState === "ready" || hasCompleteSnapshot) &&
+      incidents.length > 0 ? (
         <IncidentQueue
           incidents={incidents}
           onSelect={selectIncident}

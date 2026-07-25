@@ -23,6 +23,12 @@ export const incidentEventKinds = [
 export type IncidentStatus = (typeof incidentStatuses)[number]
 export type IncidentPriority = (typeof incidentPriorities)[number]
 export type IncidentEventKind = (typeof incidentEventKinds)[number]
+export type SlaState =
+  | "NOT_CONFIGURED"
+  | "ON_TRACK"
+  | "BREACHED"
+  | "MET"
+export type SlaPhase = "ACKNOWLEDGEMENT" | "RESOLUTION"
 
 export interface IncidentFilters {
   status?: IncidentStatus
@@ -41,6 +47,12 @@ export interface IncidentManagedService {
   name: string
 }
 
+export interface IncidentSla {
+  state: SlaState
+  phase: SlaPhase | null
+  deadline: string | null
+}
+
 export interface IncidentSummary {
   id: number
   referenceCode: string
@@ -49,6 +61,7 @@ export interface IncidentSummary {
   status: IncidentStatus
   managedService: IncidentManagedService
   assignee: IncidentUser | null
+  sla: IncidentSla
   createdAt: string
   updatedAt: string
 }

@@ -59,6 +59,11 @@ const incident: IncidentDetail = {
     username: "ana",
     displayName: "Ana Anić",
   },
+  sla: {
+    state: "NOT_CONFIGURED",
+    phase: null,
+    deadline: null,
+  },
   createdAt: "2026-07-25T08:15:30Z",
   updatedAt: "2026-07-25T08:15:30Z",
   acknowledgedAt: null,
@@ -151,7 +156,30 @@ describe("IncidentDetailPanel", () => {
     expect(
       screen.getByText("Created by Luka Golubović"),
     ).toBeInTheDocument()
+    expect(screen.getByText("SLA not configured")).toBeInTheDocument()
     expect(mockGetIncident).not.toHaveBeenCalled()
+  })
+
+  it("shows the breached SLA phase and server-calculated deadline", () => {
+    render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={{
+          ...incident,
+          sla: {
+            state: "BREACHED",
+            phase: "RESOLUTION",
+            deadline: "2026-07-25T09:15:30Z",
+          },
+        }}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("Resolution breached")).toBeInTheDocument()
+    expect(
+      screen.getByText(/Deadline/, { selector: "span" }),
+    ).toBeInTheDocument()
   })
 
   it("keeps the loaded detail and edited values after an update fails", async () => {

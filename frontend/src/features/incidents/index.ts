@@ -9,6 +9,7 @@ export {
 } from "./api/incidents-api"
 export { IncidentDetailPanel } from "./components/IncidentDetailPanel"
 export { IncidentFormDialog } from "./components/IncidentFormDialog"
+export { IncidentSlaIndicator } from "./components/IncidentSlaIndicator"
 export {
   incidentEventKinds,
   incidentPriorities,
@@ -23,4 +24,7 @@ export type {
   IncidentRequest,
   IncidentStatus,
   IncidentSummary,
+  IncidentSla,
+  SlaPhase,
+  SlaState,
 } from "./model/incident.types"

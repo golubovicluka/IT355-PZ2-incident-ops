@@ -32,6 +32,7 @@ import {
 import { IncidentFormDialog } from "@/features/incidents/components/IncidentFormDialog"
 import { IncidentEscalationForm } from "@/features/incidents/components/IncidentEscalationForm"
 import { IncidentNoteForm } from "@/features/incidents/components/IncidentNoteForm"
+import { IncidentSlaIndicator } from "@/features/incidents/components/IncidentSlaIndicator"
 import type {
   IncidentDetail,
   IncidentEventKind,
@@ -343,6 +344,21 @@ export function IncidentDetailPanel({
               </p>
             </div>
           </div>
+
+          <section
+            aria-labelledby={`incident-${incident.id}-sla`}
+            className="rounded-lg border p-4"
+          >
+            <h3
+              className="text-sm font-medium"
+              id={`incident-${incident.id}-sla`}
+            >
+              Service-level target
+            </h3>
+            <div className="mt-2">
+              <IncidentSlaIndicator sla={incident.sla} />
+            </div>
+          </section>
 
           <section aria-labelledby={`incident-${incident.id}-status-actions`}>
             <h3

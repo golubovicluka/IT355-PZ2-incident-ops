@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, useLocation } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { DashboardPage } from "@/features/dashboard/pages/DashboardPage"
+import { getOperationalSummary } from "@/features/dashboard/api/analytics-api"
 import {
   listIncidents,
   type IncidentDetail,
@@ -17,13 +18,21 @@ vi.mock("@/features/incidents", async (importOriginal) => ({
   IncidentDetailPanel: ({
     incidentId,
     initialIncident,
+    onUpdated,
   }: {
     incidentId: number
     initialIncident?: IncidentDetail
+    onUpdated?: (incident: IncidentDetail) => void
   }) => (
     <div>
       Incident detail {incidentId}
       {initialIncident ? `: ${initialIncident.title}` : ""}
+      <button
+        onClick={() => onUpdated?.(acknowledgedIncident)}
+        type="button"
+      >
+        Complete incident update
+      </button>
     </div>
   ),
   IncidentFormDialog: ({
@@ -53,8 +62,13 @@ vi.mock("@/shared/catalogs/catalog-api", () => ({
   listServiceCatalog: vi.fn(),
 }))
 
+vi.mock("@/features/dashboard/api/analytics-api", () => ({
+  getOperationalSummary: vi.fn(),
+}))
+
 const mockListIncidents = vi.mocked(listIncidents)
 const mockListServices = vi.mocked(listServiceCatalog)
+const mockGetOperationalSummary = vi.mocked(getOperationalSummary)
 
 const service: ManagedServiceCatalogItem = {
   id: 7,
@@ -81,6 +95,11 @@ const incident: IncidentSummary = {
     id: 12,
     username: "ana",
     displayName: "Ana Anić",
+  },
+  sla: {
+    state: "BREACHED",
+    phase: "ACKNOWLEDGEMENT",
+    deadline: "2026-07-25T08:20:30Z",
   },
   createdAt: "2026-07-25T08:15:30Z",
   updatedAt: "2026-07-25T08:15:30Z",
@@ -118,6 +137,18 @@ const createdIncident: IncidentDetail = {
   ],
 }
 
+const acknowledgedIncident: IncidentDetail = {
+  ...createdIncident,
+  status: "ACKNOWLEDGED",
+  acknowledgedAt: "2026-07-25T08:18:30Z",
+  allowedTransitions: ["INVESTIGATING"],
+  sla: {
+    state: "ON_TRACK",
+    phase: "RESOLUTION",
+    deadline: "2026-07-25T09:15:30Z",
+  },
+}
+
 function LocationProbe() {
   const location = useLocation()
   return <output data-testid="location-search">{location.search}</output>
@@ -136,6 +167,34 @@ describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockListServices.mockResolvedValue([])
+    mockGetOperationalSummary.mockResolvedValue({
+      open: 3,
+      active: 2,
+      resolved: 5,
+      breached: 1,
+    })
+  })
+
+  it("shows server-calculated counters and incident SLA deadlines", async () => {
+    mockListIncidents.mockResolvedValue([incident])
+
+    renderDashboard()
+
+    expect(await screen.findByText(incident.referenceCode)).toBeInTheDocument()
+    const summary = within(
+      screen.getByRole("region", { name: "Operational summary" }),
+    )
+    expect(summary.getByText("Open")).toBeInTheDocument()
+    expect(summary.getByText("3")).toBeInTheDocument()
+    expect(summary.getByText("Active")).toBeInTheDocument()
+    expect(summary.getByText("2")).toBeInTheDocument()
+    expect(summary.getByText("Resolved")).toBeInTheDocument()
+    expect(summary.getByText("5")).toBeInTheDocument()
+    expect(summary.getByText("SLA breached")).toBeInTheDocument()
+    expect(screen.getByText("Acknowledgement breached")).toBeInTheDocument()
+    expect(
+      screen.getByText(/Deadline/, { selector: "span" }),
+    ).toBeInTheDocument()
   })
 
   it("distinguishes initial loading from an empty incident queue", async () => {
@@ -170,6 +229,25 @@ describe("DashboardPage", () => {
       await screen.findByText("No incidents in the queue"),
     ).toBeInTheDocument()
     expect(mockListIncidents).toHaveBeenCalledTimes(2)
+  })
+
+  it("keeps previously loaded dashboard data visible when a refresh fails", async () => {
+    const user = userEvent.setup()
+    mockListIncidents
+      .mockResolvedValueOnce([incident])
+      .mockRejectedValueOnce(new Error("offline"))
+
+    renderDashboard()
+    await screen.findByText(incident.referenceCode)
+
+    await user.click(screen.getByRole("combobox", { name: "Status" }))
+    await user.click(screen.getByRole("option", { name: "Investigating" }))
+
+    expect(
+      await screen.findByText("Dashboard data may be stale"),
+    ).toBeInTheDocument()
+    expect(screen.getByText(incident.referenceCode)).toBeInTheDocument()
+    expect(screen.getByText("SLA breached")).toBeInTheDocument()
   })
 
   it("loads incident summaries using filters from the dashboard URL", async () => {
@@ -266,5 +344,51 @@ describe("DashboardPage", () => {
         "INC-20260725-NEWINC99 was reported successfully.",
       ),
     ).toBeInTheDocument()
+  })
+
+  it("refreshes server counters after created and updated mutation responses", async () => {
+    const user = userEvent.setup()
+    mockListIncidents.mockResolvedValue([])
+    mockGetOperationalSummary
+      .mockResolvedValueOnce({
+        open: 3,
+        active: 2,
+        resolved: 5,
+        breached: 1,
+      })
+      .mockResolvedValueOnce({
+        open: 4,
+        active: 2,
+        resolved: 5,
+        breached: 2,
+      })
+      .mockResolvedValueOnce({
+        open: 3,
+        active: 3,
+        resolved: 5,
+        breached: 1,
+      })
+
+    renderDashboard()
+    await screen.findByText("No incidents in the queue")
+
+    await user.click(
+      screen.getByRole("button", { name: "Report incident" }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Complete incident report" }),
+    )
+
+    const summary = within(
+      screen.getByRole("region", { name: "Operational summary" }),
+    )
+    expect(await summary.findByText("4")).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole("button", { name: "Complete incident update" }),
+    )
+
+    expect(await summary.findAllByText("3")).toHaveLength(2)
+    expect(mockGetOperationalSummary).toHaveBeenCalledTimes(3)
   })
 })
