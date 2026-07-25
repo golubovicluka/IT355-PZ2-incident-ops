@@ -1,6 +1,7 @@
 package com.golubovicluka.incident_ops.escalation.infrastructure.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,4 +14,11 @@ interface SpringDataEscalationRepository
 			where escalation.incident.id = :incidentId
 			""")
 	int findHighestLevelByIncidentId(@Param("incidentId") long incidentId);
+
+	@Modifying(flushAutomatically = true)
+	@Query("""
+			delete from EscalationJpaEntity escalation
+			where escalation.incident.id = :incidentId
+			""")
+	void deleteByIncidentId(@Param("incidentId") long incidentId);
 }

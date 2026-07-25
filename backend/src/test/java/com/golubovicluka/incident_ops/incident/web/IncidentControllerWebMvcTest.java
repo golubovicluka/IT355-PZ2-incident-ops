@@ -1,7 +1,10 @@
 package com.golubovicluka.incident_ops.incident.web;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -16,6 +19,7 @@ import com.golubovicluka.incident_ops.analytics.domain.SlaEvaluation;
 import com.golubovicluka.incident_ops.analytics.domain.SlaPhase;
 import com.golubovicluka.incident_ops.incident.application.AddIncidentNote;
 import com.golubovicluka.incident_ops.incident.application.CreateIncident;
+import com.golubovicluka.incident_ops.incident.application.DeleteIncident;
 import com.golubovicluka.incident_ops.incident.application.ChangeIncidentStatus;
 import com.golubovicluka.incident_ops.incident.application.GetIncident;
 import com.golubovicluka.incident_ops.incident.application.IncidentActorNotFoundException;
@@ -75,6 +79,9 @@ class IncidentControllerWebMvcTest {
 
 	@MockitoBean
 	private CreateIncident createIncident;
+
+	@MockitoBean
+	private DeleteIncident deleteIncident;
 
 	@MockitoBean
 	private AddIncidentNote addIncidentNote;
@@ -480,6 +487,39 @@ class IncidentControllerWebMvcTest {
 	}
 
 	@Test
+	@WithMockUser(username = "admin", roles = "ADMIN")
+	void administratorDeletesAnIncident() throws Exception {
+		mockMvc.perform(delete("/api/incidents/42"))
+				.andExpect(status().isNoContent());
+
+		verify(deleteIncident).execute(42L);
+	}
+
+	@Test
+	@WithMockUser(username = "responder", roles = "RESPONDER")
+	void responderCannotDeleteAnIncident() throws Exception {
+		mockMvc.perform(delete("/api/incidents/42"))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.message").value(
+						"You do not have permission to access this resource"));
+
+		verifyNoInteractions(deleteIncident);
+	}
+
+	@Test
+	@WithMockUser(username = "admin", roles = "ADMIN")
+	void mapsUnknownIncidentDeletionToNotFound() throws Exception {
+		willThrow(new IncidentNotFoundException())
+				.given(deleteIncident)
+				.execute(404L);
+
+		mockMvc.perform(delete("/api/incidents/404"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.message")
+						.value("Incident does not exist"));
+	}
+
+	@Test
 	void anonymousUserCannotAccessIncidentApi() throws Exception {
 		mockMvc.perform(get("/api/incidents")).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/api/incidents/42"))
@@ -503,6 +543,8 @@ class IncidentControllerWebMvcTest {
 						.content("""
 								{"note": "Investigating."}
 								"""))
+				.andExpect(status().isUnauthorized());
+		mockMvc.perform(delete("/api/incidents/42"))
 				.andExpect(status().isUnauthorized());
 	}
 

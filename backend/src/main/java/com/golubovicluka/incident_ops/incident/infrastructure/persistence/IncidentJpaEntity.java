@@ -85,8 +85,8 @@ public class IncidentJpaEntity {
 
 	@OneToMany(
 			mappedBy = "incident",
-			cascade = CascadeType.PERSIST,
-			orphanRemoval = false)
+			cascade = CascadeType.ALL,
+			orphanRemoval = true)
 	@OrderBy("occurredAt ASC, id ASC")
 	private List<IncidentEventJpaEntity> events = new ArrayList<>();
 

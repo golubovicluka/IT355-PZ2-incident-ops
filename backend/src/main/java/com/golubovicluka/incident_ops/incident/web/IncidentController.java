@@ -5,6 +5,7 @@ import java.util.List;
 import com.golubovicluka.incident_ops.incident.application.AddIncidentNote;
 import com.golubovicluka.incident_ops.incident.application.ChangeIncidentStatus;
 import com.golubovicluka.incident_ops.incident.application.CreateIncident;
+import com.golubovicluka.incident_ops.incident.application.DeleteIncident;
 import com.golubovicluka.incident_ops.incident.application.GetIncident;
 import com.golubovicluka.incident_ops.incident.application.ListIncidents;
 import com.golubovicluka.incident_ops.incident.application.UpdateIncident;
@@ -24,6 +25,7 @@ import com.golubovicluka.incident_ops.incident.web.response.IncidentSummaryRespo
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,6 +43,7 @@ public class IncidentController {
 	private final ListIncidents listIncidents;
 	private final GetIncident getIncident;
 	private final CreateIncident createIncident;
+	private final DeleteIncident deleteIncident;
 	private final UpdateIncident updateIncident;
 	private final ChangeIncidentStatus changeIncidentStatus;
 	private final AddIncidentNote addIncidentNote;
@@ -49,12 +52,14 @@ public class IncidentController {
 			ListIncidents listIncidents,
 			GetIncident getIncident,
 			CreateIncident createIncident,
+			DeleteIncident deleteIncident,
 			UpdateIncident updateIncident,
 			ChangeIncidentStatus changeIncidentStatus,
 			AddIncidentNote addIncidentNote) {
 		this.listIncidents = listIncidents;
 		this.getIncident = getIncident;
 		this.createIncident = createIncident;
+		this.deleteIncident = deleteIncident;
 		this.updateIncident = updateIncident;
 		this.changeIncidentStatus = changeIncidentStatus;
 		this.addIncidentNote = addIncidentNote;
@@ -80,6 +85,12 @@ public class IncidentController {
 	@GetMapping("/{id}")
 	IncidentDetailResponse detail(@PathVariable long id) {
 		return IncidentDetailResponse.from(getIncident.execute(id));
+	}
+
+	@DeleteMapping("/{id}")
+	ResponseEntity<Void> delete(@PathVariable long id) {
+		deleteIncident.execute(id);
+		return ResponseEntity.noContent().build();
 	}
 
 	@PostMapping

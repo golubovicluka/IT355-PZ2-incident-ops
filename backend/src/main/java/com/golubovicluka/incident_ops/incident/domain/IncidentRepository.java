@@ -10,4 +10,6 @@ public interface IncidentRepository {
 	List<Incident> findAll(IncidentCriteria criteria);
 
 	Optional<Incident> findById(long id);
+
+	void delete(Incident incident);
 }

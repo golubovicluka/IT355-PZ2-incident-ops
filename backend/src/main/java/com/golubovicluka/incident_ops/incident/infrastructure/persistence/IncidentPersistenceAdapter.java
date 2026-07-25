@@ -60,6 +60,15 @@ public class IncidentPersistenceAdapter implements IncidentRepository {
 		return repository.findById(id).map(mapper::toDomain);
 	}
 
+	@Override
+	public void delete(Incident incident) {
+		IncidentJpaEntity entity = repository.findById(incident.id())
+				.orElseThrow(() -> new IllegalStateException(
+						"Incident disappeared during deletion"));
+		repository.delete(entity);
+		repository.flush();
+	}
+
 	private Incident saveNew(Incident incident) {
 		ManagedServiceJpaEntity service = serviceReference(
 				incident.managedService().id());

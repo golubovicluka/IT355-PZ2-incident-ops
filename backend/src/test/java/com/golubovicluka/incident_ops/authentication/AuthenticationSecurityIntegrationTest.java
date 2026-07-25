@@ -41,7 +41,6 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.json.JsonMapper;
@@ -264,12 +263,40 @@ class AuthenticationSecurityIntegrationTest extends PostgreSQLContainerSupport {
 
 	@Test
 	void administratorJwtCanDeleteIncident() throws Exception {
+		UserAccount administrator = users.findByUsername("admin").orElseThrow();
+		ManagedService managedService = services.save(ManagedService.create(
+				"Administrator Delete Service " + System.nanoTime(),
+				"Verifies incident deletion through the signed administrator.",
+				Criticality.HIGH,
+				new OwningTeam(
+						administrator.team().id(),
+						administrator.team().name())));
 		String administratorToken = login("admin", "admin-demo-password");
+		MvcResult created = mockMvc.perform(post("/api/incidents")
+						.header(
+								HttpHeaders.AUTHORIZATION,
+								"Bearer " + administratorToken)
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "title": "Incident to delete",
+								  "description": "Created to verify administrator deletion.",
+								  "priority": "SEV3",
+								  "managedServiceId": %d,
+								  "assigneeId": null
+								}
+								""".formatted(managedService.id())))
+				.andExpect(status().isCreated())
+				.andReturn();
+		long incidentId = JsonMapper.builder()
+				.build()
+				.readTree(created.getResponse().getContentAsString())
+				.get("id")
+				.asLong();
 
-		mockMvc.perform(delete("/api/incidents/42")
+		mockMvc.perform(delete("/api/incidents/{id}", incidentId)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + administratorToken))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.subject").value("admin"));
+				.andExpect(status().isNoContent());
 	}
 
 	@Test
@@ -352,11 +379,6 @@ class AuthenticationSecurityIntegrationTest extends PostgreSQLContainerSupport {
 
 		@GetMapping({"/api/test", "/api/admin/test"})
 		Map<String, String> currentSubject(Authentication authentication) {
-			return Map.of("subject", authentication.getName());
-		}
-
-		@DeleteMapping("/api/incidents/{id}")
-		Map<String, String> deleteIncident(Authentication authentication) {
 			return Map.of("subject", authentication.getName());
 		}
 	}

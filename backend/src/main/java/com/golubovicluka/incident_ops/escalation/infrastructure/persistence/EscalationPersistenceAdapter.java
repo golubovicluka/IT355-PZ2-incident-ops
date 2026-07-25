@@ -50,4 +50,9 @@ public class EscalationPersistenceAdapter implements EscalationRepository {
 	public int findHighestLevel(long incidentId) {
 		return repository.findHighestLevelByIncidentId(incidentId);
 	}
+
+	@Override
+	public void deleteByIncidentId(long incidentId) {
+		repository.deleteByIncidentId(incidentId);
+	}
 }

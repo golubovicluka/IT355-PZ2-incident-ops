@@ -5,4 +5,6 @@ public interface EscalationRepository {
 	Escalation save(Escalation escalation);
 
 	int findHighestLevel(long incidentId);
+
+	void deleteByIncidentId(long incidentId);
 }

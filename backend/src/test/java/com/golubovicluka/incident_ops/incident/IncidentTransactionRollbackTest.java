@@ -22,6 +22,7 @@ import com.golubovicluka.incident_ops.identity.domain.TeamRepository;
 import com.golubovicluka.incident_ops.identity.domain.UserAccount;
 import com.golubovicluka.incident_ops.identity.domain.UserAccountRepository;
 import com.golubovicluka.incident_ops.incident.application.CreateIncident;
+import com.golubovicluka.incident_ops.incident.application.DeleteIncident;
 import com.golubovicluka.incident_ops.incident.application.ReferenceCodeGenerator;
 import com.golubovicluka.incident_ops.incident.application.UpdateIncident;
 import com.golubovicluka.incident_ops.incident.application.command.CreateIncidentCommand;
@@ -66,6 +67,9 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 
 	@Autowired
 	private CreateIncident createIncident;
+
+	@Autowired
+	private DeleteIncident deleteIncident;
 
 	@Autowired
 	private UpdateIncident updateIncident;
@@ -158,6 +162,54 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 		assertThat(countRows("escalations")).isEqualTo(escalationCount);
 	}
 
+	@Test
+	void deletionRemovesIncidentTimelineAndEscalations() {
+		IncidentDetailView created = createIncident.execute(createCommand());
+		escalateIncident.execute(new EscalateIncidentCommand(
+				created.id(),
+				"Customer impact requires escalation.",
+				reporter.username()));
+
+		deleteIncident.execute(created.id());
+
+		assertThat(countRowsForIncident("incident_events", created.id()))
+				.isZero();
+		assertThat(countRowsForIncident("escalations", created.id()))
+				.isZero();
+		assertThat(jdbcTemplate.queryForObject(
+				"select count(*) from incidents where id = ?",
+				Long.class,
+				created.id())).isZero();
+	}
+
+	@Test
+	void failedDeletionRestoresIncidentTimelineAndEscalations() {
+		IncidentDetailView created = createIncident.execute(createCommand());
+		escalateIncident.execute(new EscalateIncidentCommand(
+				created.id(),
+				"Customer impact requires escalation.",
+				reporter.username()));
+		long eventCount = countRowsForIncident(
+				"incident_events",
+				created.id());
+		long escalationCount = countRowsForIncident(
+				"escalations",
+				created.id());
+		incidents.failNextDelete();
+
+		assertThatThrownBy(() -> deleteIncident.execute(created.id()))
+				.isInstanceOf(SimulatedPersistenceFailure.class);
+
+		assertThat(countRowsForIncident("incident_events", created.id()))
+				.isEqualTo(eventCount);
+		assertThat(countRowsForIncident("escalations", created.id()))
+				.isEqualTo(escalationCount);
+		assertThat(jdbcTemplate.queryForObject(
+				"select count(*) from incidents where id = ?",
+				Long.class,
+				created.id())).isEqualTo(1L);
+	}
+
 	private CreateIncidentCommand createCommand() {
 		return new CreateIncidentCommand(
 				"Rollback test incident",
@@ -172,6 +224,13 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 		return jdbcTemplate.queryForObject(
 				"select count(*) from " + table,
 				Long.class);
+	}
+
+	private long countRowsForIncident(String table, long incidentId) {
+		return jdbcTemplate.queryForObject(
+				"select count(*) from " + table + " where incident_id = ?",
+				Long.class,
+				incidentId);
 	}
 
 	@TestConfiguration(proxyBeanMethods = false)
@@ -213,6 +272,7 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 
 		private final IncidentPersistenceAdapter delegate;
 		private boolean failNextSave;
+		private boolean failNextDelete;
 
 		FailAfterSaveIncidentRepository(IncidentPersistenceAdapter delegate) {
 			this.delegate = delegate;
@@ -238,12 +298,26 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 			return delegate.findById(id);
 		}
 
+		@Override
+		public void delete(Incident incident) {
+			delegate.delete(incident);
+			if (failNextDelete) {
+				failNextDelete = false;
+				throw new SimulatedPersistenceFailure();
+			}
+		}
+
 		void failNextSave() {
 			failNextSave = true;
 		}
 
 		void allowSaves() {
 			failNextSave = false;
+			failNextDelete = false;
+		}
+
+		void failNextDelete() {
+			failNextDelete = true;
 		}
 	}
 
@@ -271,6 +345,11 @@ class IncidentTransactionRollbackTest extends PostgreSQLContainerSupport {
 		@Override
 		public int findHighestLevel(long incidentId) {
 			return delegate.findHighestLevel(incidentId);
+		}
+
+		@Override
+		public void deleteByIncidentId(long incidentId) {
+			delegate.deleteByIncidentId(incidentId);
 		}
 
 		void failNextSave() {
