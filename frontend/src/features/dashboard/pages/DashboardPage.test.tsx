@@ -100,6 +100,7 @@ const createdIncident: IncidentDetail = {
   acknowledgedAt: null,
   resolvedAt: null,
   allowedTransitions: ["ACKNOWLEDGED", "INVESTIGATING"],
+  escalations: [],
   timeline: [
     {
       id: 100,

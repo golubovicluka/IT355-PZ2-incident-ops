@@ -1,6 +1,7 @@
 export {
   addIncidentNote,
   createIncident,
+  escalateIncident,
   getIncident,
   listIncidents,
   transitionIncidentStatus,
@@ -15,6 +16,7 @@ export {
 } from "./model/incident.types"
 export type {
   IncidentDetail,
+  IncidentEscalation,
   IncidentEventKind,
   IncidentFilters,
   IncidentPriority,

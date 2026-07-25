@@ -60,7 +60,16 @@ export interface IncidentTimelineEntry {
   previousStatus: IncidentStatus | null
   newStatus: IncidentStatus | null
   note: string | null
+  escalationLevel?: number | null
+  escalationReason?: string | null
   occurredAt: string
+}
+
+export interface IncidentEscalation {
+  level: number
+  reason: string
+  actor: IncidentUser
+  escalatedAt: string
 }
 
 export interface IncidentDetail extends IncidentSummary {
@@ -70,6 +79,7 @@ export interface IncidentDetail extends IncidentSummary {
   resolvedAt: string | null
   allowedTransitions: IncidentStatus[]
   timeline: IncidentTimelineEntry[]
+  escalations: IncidentEscalation[]
 }
 
 export interface IncidentRequest {

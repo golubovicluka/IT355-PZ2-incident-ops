@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   addIncidentNote,
+  escalateIncident,
   getIncident,
   transitionIncidentStatus,
   updateIncident,
@@ -18,6 +19,7 @@ import {
 
 vi.mock("@/features/incidents/api/incidents-api", () => ({
   addIncidentNote: vi.fn(),
+  escalateIncident: vi.fn(),
   getIncident: vi.fn(),
   transitionIncidentStatus: vi.fn(),
   updateIncident: vi.fn(),
@@ -30,6 +32,7 @@ vi.mock("@/shared/catalogs/catalog-api", () => ({
 
 const mockGetIncident = vi.mocked(getIncident)
 const mockAddIncidentNote = vi.mocked(addIncidentNote)
+const mockEscalateIncident = vi.mocked(escalateIncident)
 const mockTransitionIncidentStatus = vi.mocked(transitionIncidentStatus)
 const mockUpdateIncident = vi.mocked(updateIncident)
 const mockListServices = vi.mocked(listServiceCatalog)
@@ -61,6 +64,7 @@ const incident: IncidentDetail = {
   acknowledgedAt: null,
   resolvedAt: null,
   allowedTransitions: ["ACKNOWLEDGED", "INVESTIGATING"],
+  escalations: [],
   timeline: [
     {
       id: 91,
@@ -378,5 +382,139 @@ describe("IncidentDetailPanel", () => {
     ).toBeInTheDocument()
     expect(noteField).toHaveValue(note)
     expect(onUpdated).not.toHaveBeenCalled()
+  })
+
+  it("submits a 1000-character-limited escalation and renders server history", async () => {
+    const user = userEvent.setup()
+    const reason = "Checkout is unavailable for all customers."
+    const escalated: IncidentDetail = {
+      ...incident,
+      updatedAt: "2026-07-25T08:20:30Z",
+      escalations: [
+        {
+          level: 1,
+          reason,
+          actor: incident.reporter,
+          escalatedAt: "2026-07-25T08:20:30Z",
+        },
+      ],
+      timeline: [
+        ...incident.timeline,
+        {
+          id: 92,
+          kind: "ESCALATED",
+          actor: incident.reporter,
+          previousStatus: null,
+          newStatus: null,
+          note: null,
+          escalationLevel: 1,
+          escalationReason: reason,
+          occurredAt: "2026-07-25T08:20:30Z",
+        },
+      ],
+    }
+    mockEscalateIncident.mockResolvedValue(escalated)
+    const onUpdated = vi.fn()
+
+    render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={incident}
+        onUpdated={onUpdated}
+      />,
+    )
+
+    expect(
+      screen.getByText("No manual escalations have been recorded."),
+    ).toBeInTheDocument()
+    const reasonField = screen.getByLabelText("Escalation reason")
+    expect(reasonField).toHaveAttribute("maxlength", "1000")
+    expect(screen.getByText("0 / 1,000 characters")).toBeInTheDocument()
+
+    await user.type(reasonField, reason)
+    await user.click(
+      screen.getByRole("button", { name: "Escalate incident" }),
+    )
+
+    expect(mockEscalateIncident).toHaveBeenCalledWith(incident.id, reason)
+    expect(reasonField).toHaveValue("")
+    expect(await screen.findByText("Level 1")).toBeInTheDocument()
+    expect(screen.getAllByText(reason)).toHaveLength(1)
+    expect(
+      screen.getByText("Escalated by Luka Golubović"),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(`Level 1: ${reason}`),
+    ).toBeInTheDocument()
+    expect(onUpdated).toHaveBeenCalledWith(escalated)
+  })
+
+  it("validates blank escalation and preserves its reason after failure", async () => {
+    const user = userEvent.setup()
+    const reason = "Checkout is unavailable in Europe."
+    mockEscalateIncident.mockRejectedValue(
+      new ApiError({
+        timestamp: "2026-07-25T12:00:00Z",
+        status: 409,
+        error: "Conflict",
+        message: "The incident cannot be escalated",
+        path: "/api/incidents/42/escalations",
+        fieldErrors: {},
+      }),
+    )
+
+    render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={incident}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole("button", { name: "Escalate incident" }),
+    )
+    expect(
+      await screen.findByText(
+        "Enter a reason before escalating the incident.",
+      ),
+    ).toBeInTheDocument()
+    expect(mockEscalateIncident).not.toHaveBeenCalled()
+
+    const reasonField = screen.getByLabelText("Escalation reason")
+    await user.type(reasonField, reason)
+    await user.click(
+      screen.getByRole("button", { name: "Escalate incident" }),
+    )
+
+    expect(
+      await screen.findByText("The incident cannot be escalated"),
+    ).toBeInTheDocument()
+    expect(reasonField).toHaveValue(reason)
+  })
+
+  it("hides the escalation form for resolved incidents", () => {
+    render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={{
+          ...incident,
+          status: "RESOLVED",
+          acknowledgedAt: "2026-07-25T08:16:30Z",
+          resolvedAt: "2026-07-25T08:20:30Z",
+          allowedTransitions: ["CLOSED", "INVESTIGATING"],
+        }}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        "Resolved and closed incidents cannot be escalated.",
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByLabelText("Escalation reason"),
+    ).not.toBeInTheDocument()
   })
 })

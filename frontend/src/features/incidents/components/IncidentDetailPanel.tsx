@@ -30,6 +30,7 @@ import {
   updateIncident,
 } from "@/features/incidents/api/incidents-api"
 import { IncidentFormDialog } from "@/features/incidents/components/IncidentFormDialog"
+import { IncidentEscalationForm } from "@/features/incidents/components/IncidentEscalationForm"
 import { IncidentNoteForm } from "@/features/incidents/components/IncidentNoteForm"
 import type {
   IncidentDetail,
@@ -232,6 +233,13 @@ export function IncidentDetailPanel({
       Date.parse(left.occurredAt) - Date.parse(right.occurredAt)
     return occurredAtDifference || left.id - right.id
   })
+  const orderedEscalations = [...incident.escalations].sort(
+    (left, right) =>
+      left.level - right.level ||
+      Date.parse(left.escalatedAt) - Date.parse(right.escalatedAt),
+  )
+  const canEscalate =
+    incident.status !== "RESOLVED" && incident.status !== "CLOSED"
 
   return (
     <>
@@ -382,6 +390,62 @@ export function IncidentDetailPanel({
 
           <Separator />
 
+          <section aria-labelledby={`incident-${incident.id}-escalations`}>
+            <h3
+              className="text-sm font-medium"
+              id={`incident-${incident.id}-escalations`}
+            >
+              Escalation history
+            </h3>
+            {canEscalate ? (
+              <IncidentEscalationForm
+                incidentId={incident.id}
+                onSuccess={acceptUpdate}
+              />
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Resolved and closed incidents cannot be escalated.
+              </p>
+            )}
+            {orderedEscalations.length > 0 ? (
+              <ol
+                aria-label="Incident escalations"
+                className="mt-4 grid gap-3 sm:grid-cols-2"
+              >
+                {orderedEscalations.map((escalation) => (
+                  <li
+                    className="rounded-lg border bg-card p-4"
+                    key={`${escalation.level}-${escalation.escalatedAt}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge variant="destructive">
+                        Level {escalation.level}
+                      </Badge>
+                      <time
+                        className="text-xs text-muted-foreground"
+                        dateTime={escalation.escalatedAt}
+                      >
+                        {formatDateTime(escalation.escalatedAt)}
+                      </time>
+                    </div>
+                    <p className="mt-3 whitespace-pre-wrap text-sm">
+                      {escalation.reason}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Escalated by {escalation.actor.displayName}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No manual escalations have been recorded.
+              </p>
+            )}
+          </section>
+
+          <Separator />
+
           <section aria-labelledby={`incident-${incident.id}-timeline`}>
             <div className="flex items-center gap-2">
               <Clock3Icon className="size-4 text-muted-foreground" />
@@ -419,6 +483,14 @@ export function IncidentDetailPanel({
                       {entry.kind === "NOTE_ADDED" && entry.note ? (
                         <p className="mt-2 whitespace-pre-wrap text-sm">
                           {entry.note}
+                        </p>
+                      ) : null}
+                      {entry.kind === "ESCALATED" &&
+                      entry.escalationLevel &&
+                      entry.escalationReason ? (
+                        <p className="mt-2 whitespace-pre-wrap text-sm">
+                          Level {entry.escalationLevel}:{" "}
+                          {entry.escalationReason}
                         </p>
                       ) : null}
                       <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">

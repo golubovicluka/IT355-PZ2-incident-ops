@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   addIncidentNote,
   createIncident,
+  escalateIncident,
   getIncident,
   listIncidents,
   transitionIncidentStatus,
@@ -65,6 +66,7 @@ describe("incidents API", () => {
     updateIncident(42, request)
     transitionIncidentStatus(42, "ACKNOWLEDGED")
     addIncidentNote(42, "Rolled back the checkout deployment.")
+    escalateIncident(42, "Checkout is unavailable.")
 
     expect(apiClientMocks.get).toHaveBeenCalledWith("/api/incidents/42", {
       signal: controller.signal,
@@ -84,6 +86,10 @@ describe("incidents API", () => {
     expect(apiClientMocks.post).toHaveBeenCalledWith(
       "/api/incidents/42/events",
       { note: "Rolled back the checkout deployment." },
+    )
+    expect(apiClientMocks.post).toHaveBeenCalledWith(
+      "/api/incidents/42/escalations",
+      { reason: "Checkout is unavailable." },
     )
   })
 })

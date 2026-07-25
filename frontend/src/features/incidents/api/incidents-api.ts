@@ -61,3 +61,10 @@ export function addIncidentNote(id: number, note: string) {
     note,
   })
 }
+
+export function escalateIncident(id: number, reason: string) {
+  return apiClient.post<IncidentDetail>(
+    `${INCIDENTS_PATH}/${id}/escalations`,
+    { reason },
+  )
+}
