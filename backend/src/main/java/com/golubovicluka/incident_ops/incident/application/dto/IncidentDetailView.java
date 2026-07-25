@@ -71,6 +71,7 @@ public record IncidentDetailView(
 			UserView actor,
 			IncidentStatus previousStatus,
 			IncidentStatus newStatus,
+			String note,
 			Instant occurredAt) {
 
 		static EventView from(IncidentEvent event) {
@@ -80,6 +81,7 @@ public record IncidentDetailView(
 					UserView.from(event.actor()),
 					event.previousStatus(),
 					event.newStatus(),
+					event.note(),
 					event.occurredAt());
 		}
 	}

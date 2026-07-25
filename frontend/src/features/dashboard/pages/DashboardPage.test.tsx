@@ -111,6 +111,7 @@ const createdIncident: IncidentDetail = {
       },
       previousStatus: null,
       newStatus: null,
+      note: null,
       occurredAt: "2026-07-25T09:00:00Z",
     },
   ],

@@ -101,6 +101,7 @@ public class IncidentPersistenceAdapter implements IncidentRepository {
 						userReference(event.actor().id()),
 						event.previousStatus(),
 						event.newStatus(),
+						event.note(),
 						event.occurredAt())));
 		repository.flush();
 		return mapper.toDomain(entity);

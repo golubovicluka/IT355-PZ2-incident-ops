@@ -1,4 +1,5 @@
 export {
+  addIncidentNote,
   createIncident,
   getIncident,
   listIncidents,

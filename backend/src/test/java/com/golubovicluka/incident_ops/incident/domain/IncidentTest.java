@@ -162,6 +162,48 @@ class IncidentTest {
 		assertThat(incident.updatedAt()).isEqualTo(lifecycleUpdatedAt(currentStatus));
 	}
 
+	@Test
+	void addsNormalizedTimelineNoteWithoutChangingLifecycle() {
+		Incident incident = persistedIncident();
+
+		Incident noted = incident.addNote(
+				"  Rolled back the checkout deployment.  ",
+				ASSIGNEE,
+				TRANSITIONED_AT);
+
+		assertThat(noted.status()).isEqualTo(IncidentStatus.OPEN);
+		assertThat(noted.acknowledgedAt()).isNull();
+		assertThat(noted.resolvedAt()).isNull();
+		assertThat(noted.updatedAt()).isEqualTo(TRANSITIONED_AT);
+		assertThat(noted.events()).hasSize(2);
+		assertThat(noted.events().getLast())
+				.isEqualTo(IncidentEvent.noteAdded(
+						ASSIGNEE,
+						"Rolled back the checkout deployment.",
+						TRANSITIONED_AT));
+	}
+
+	@Test
+	void rejectsBlankOrOversizedTimelineNoteWithoutChangingIncident() {
+		Incident incident = persistedIncident();
+
+		assertThatThrownBy(() -> incident.addNote(
+				"  ",
+				ASSIGNEE,
+				TRANSITIONED_AT))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note must not be blank");
+		assertThatThrownBy(() -> incident.addNote(
+				"x".repeat(IncidentEvent.MAX_NOTE_LENGTH + 1),
+				ASSIGNEE,
+				TRANSITIONED_AT))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note must not exceed 2000 characters");
+
+		assertThat(incident.events()).hasSize(1);
+		assertThat(incident.updatedAt()).isEqualTo(CREATED_AT);
+	}
+
 	private Incident persistedIncident() {
 		return persistedIncident(IncidentStatus.OPEN);
 	}

@@ -59,6 +59,7 @@ export interface IncidentTimelineEntry {
   actor: IncidentUser
   previousStatus: IncidentStatus | null
   newStatus: IncidentStatus | null
+  note: string | null
   occurredAt: string
 }
 

@@ -9,7 +9,10 @@ public record IncidentEvent(
 		IncidentUser actor,
 		IncidentStatus previousStatus,
 		IncidentStatus newStatus,
+		String note,
 		Instant occurredAt) {
+
+	public static final int MAX_NOTE_LENGTH = 2000;
 
 	public IncidentEvent {
 		if (id != null && id <= 0) {
@@ -35,6 +38,12 @@ public record IncidentEvent(
 			throw new IllegalArgumentException(
 					"only status-change events can contain statuses");
 		}
+		if (kind == IncidentEventKind.NOTE_ADDED) {
+			note = requireNote(note);
+		} else if (note != null) {
+			throw new IllegalArgumentException(
+					"only note events can contain note text");
+		}
 	}
 
 	public static IncidentEvent created(IncidentUser actor, Instant occurredAt) {
@@ -42,6 +51,7 @@ public record IncidentEvent(
 				null,
 				IncidentEventKind.CREATED,
 				actor,
+				null,
 				null,
 				null,
 				occurredAt);
@@ -58,6 +68,34 @@ public record IncidentEvent(
 				actor,
 				previousStatus,
 				newStatus,
+				null,
 				occurredAt);
+	}
+
+	public static IncidentEvent noteAdded(
+			IncidentUser actor,
+			String note,
+			Instant occurredAt) {
+		return new IncidentEvent(
+				null,
+				IncidentEventKind.NOTE_ADDED,
+				actor,
+				null,
+				null,
+				note,
+				occurredAt);
+	}
+
+	private static String requireNote(String value) {
+		Objects.requireNonNull(value, "note must not be null");
+		String normalized = value.strip();
+		if (normalized.isEmpty()) {
+			throw new IllegalArgumentException("note must not be blank");
+		}
+		if (normalized.length() > MAX_NOTE_LENGTH) {
+			throw new IllegalArgumentException(
+					"note must not exceed " + MAX_NOTE_LENGTH + " characters");
+		}
+		return normalized;
 	}
 }

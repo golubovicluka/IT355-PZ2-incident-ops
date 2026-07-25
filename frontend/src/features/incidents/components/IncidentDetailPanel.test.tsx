@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
+  addIncidentNote,
   getIncident,
   transitionIncidentStatus,
   updateIncident,
@@ -16,6 +17,7 @@ import {
 } from "@/shared/catalogs/catalog-api"
 
 vi.mock("@/features/incidents/api/incidents-api", () => ({
+  addIncidentNote: vi.fn(),
   getIncident: vi.fn(),
   transitionIncidentStatus: vi.fn(),
   updateIncident: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock("@/shared/catalogs/catalog-api", () => ({
 }))
 
 const mockGetIncident = vi.mocked(getIncident)
+const mockAddIncidentNote = vi.mocked(addIncidentNote)
 const mockTransitionIncidentStatus = vi.mocked(transitionIncidentStatus)
 const mockUpdateIncident = vi.mocked(updateIncident)
 const mockListServices = vi.mocked(listServiceCatalog)
@@ -69,6 +72,7 @@ const incident: IncidentDetail = {
       },
       previousStatus: null,
       newStatus: null,
+      note: null,
       occurredAt: "2026-07-25T08:15:30Z",
     },
   ],
@@ -199,6 +203,7 @@ describe("IncidentDetailPanel", () => {
           actor: incident.reporter,
           previousStatus: "OPEN",
           newStatus: "ACKNOWLEDGED",
+          note: null,
           occurredAt: "2026-07-25T08:20:30Z",
         },
       ],
@@ -283,6 +288,95 @@ describe("IncidentDetailPanel", () => {
     expect(
       screen.getByRole("button", { name: "Acknowledge incident" }),
     ).toBeInTheDocument()
+    expect(onUpdated).not.toHaveBeenCalled()
+  })
+
+  it("adds a 2000-character-limited note and clears it only after success", async () => {
+    const user = userEvent.setup()
+    const note = "Rolled back the checkout deployment."
+    const noted: IncidentDetail = {
+      ...incident,
+      updatedAt: "2026-07-25T08:20:30Z",
+      timeline: [
+        ...incident.timeline,
+        {
+          id: 92,
+          kind: "NOTE_ADDED",
+          actor: incident.reporter,
+          previousStatus: null,
+          newStatus: null,
+          note,
+          occurredAt: "2026-07-25T08:20:30Z",
+        },
+      ],
+    }
+    mockAddIncidentNote.mockResolvedValue(noted)
+    const onUpdated = vi.fn()
+
+    render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={incident}
+        onUpdated={onUpdated}
+      />,
+    )
+
+    const noteField = screen.getByLabelText("Timeline note")
+    expect(noteField).toHaveAttribute("maxlength", "2000")
+    expect(screen.getByText("0 / 2,000 characters")).toBeInTheDocument()
+
+    await user.type(noteField, note)
+    expect(
+      screen.getByText(`${note.length} / 2,000 characters`),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Add note" }))
+
+    expect(mockAddIncidentNote).toHaveBeenCalledWith(incident.id, note)
+    expect(noteField).toHaveValue("")
+    expect(await screen.findByText(note)).toBeInTheDocument()
+    expect(
+      screen.getByText("Added by Luka Golubović"),
+    ).toBeInTheDocument()
+    expect(onUpdated).toHaveBeenCalledWith(noted)
+  })
+
+  it("validates blank notes and preserves note text after a server failure", async () => {
+    const user = userEvent.setup()
+    const note = "Waiting for database recovery."
+    mockAddIncidentNote.mockRejectedValue(
+      new ApiError({
+        timestamp: "2026-07-25T12:00:00Z",
+        status: 503,
+        error: "Service Unavailable",
+        message: "The note could not be stored",
+        path: "/api/incidents/42/events",
+        fieldErrors: {},
+      }),
+    )
+    const onUpdated = vi.fn()
+
+    render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={incident}
+        onUpdated={onUpdated}
+      />,
+    )
+
+    await user.click(screen.getByRole("button", { name: "Add note" }))
+    expect(
+      await screen.findByText("Enter a note before adding it."),
+    ).toBeInTheDocument()
+    expect(mockAddIncidentNote).not.toHaveBeenCalled()
+
+    const noteField = screen.getByLabelText("Timeline note")
+    await user.type(noteField, note)
+    await user.click(screen.getByRole("button", { name: "Add note" }))
+
+    expect(
+      await screen.findByText("The note could not be stored"),
+    ).toBeInTheDocument()
+    expect(noteField).toHaveValue(note)
     expect(onUpdated).not.toHaveBeenCalled()
   })
 })

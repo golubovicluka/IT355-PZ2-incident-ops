@@ -37,6 +37,7 @@ final class IncidentPersistenceMapper {
 						userReference.apply(event.actor().id()),
 						event.previousStatus(),
 						event.newStatus(),
+						event.note(),
 						event.occurredAt())));
 		return entity;
 	}
@@ -67,6 +68,7 @@ final class IncidentPersistenceMapper {
 				toDomain(entity.getActor()),
 				entity.getPreviousStatus(),
 				entity.getNewStatus(),
+				entity.getNote(),
 				entity.getOccurredAt());
 	}
 

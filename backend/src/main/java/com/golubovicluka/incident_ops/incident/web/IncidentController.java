@@ -2,11 +2,13 @@ package com.golubovicluka.incident_ops.incident.web;
 
 import java.util.List;
 
+import com.golubovicluka.incident_ops.incident.application.AddIncidentNote;
 import com.golubovicluka.incident_ops.incident.application.ChangeIncidentStatus;
 import com.golubovicluka.incident_ops.incident.application.CreateIncident;
 import com.golubovicluka.incident_ops.incident.application.GetIncident;
 import com.golubovicluka.incident_ops.incident.application.ListIncidents;
 import com.golubovicluka.incident_ops.incident.application.UpdateIncident;
+import com.golubovicluka.incident_ops.incident.application.command.AddIncidentNoteCommand;
 import com.golubovicluka.incident_ops.incident.application.command.ChangeIncidentStatusCommand;
 import com.golubovicluka.incident_ops.incident.application.command.CreateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.command.UpdateIncidentCommand;
@@ -15,6 +17,7 @@ import com.golubovicluka.incident_ops.incident.domain.IncidentCriteria;
 import com.golubovicluka.incident_ops.incident.domain.IncidentPriority;
 import com.golubovicluka.incident_ops.incident.domain.IncidentStatus;
 import com.golubovicluka.incident_ops.incident.web.request.IncidentRequest;
+import com.golubovicluka.incident_ops.incident.web.request.IncidentNoteRequest;
 import com.golubovicluka.incident_ops.incident.web.request.IncidentStatusRequest;
 import com.golubovicluka.incident_ops.incident.web.response.IncidentDetailResponse;
 import com.golubovicluka.incident_ops.incident.web.response.IncidentSummaryResponse;
@@ -40,18 +43,21 @@ public class IncidentController {
 	private final CreateIncident createIncident;
 	private final UpdateIncident updateIncident;
 	private final ChangeIncidentStatus changeIncidentStatus;
+	private final AddIncidentNote addIncidentNote;
 
 	public IncidentController(
 			ListIncidents listIncidents,
 			GetIncident getIncident,
 			CreateIncident createIncident,
 			UpdateIncident updateIncident,
-			ChangeIncidentStatus changeIncidentStatus) {
+			ChangeIncidentStatus changeIncidentStatus,
+			AddIncidentNote addIncidentNote) {
 		this.listIncidents = listIncidents;
 		this.getIncident = getIncident;
 		this.createIncident = createIncident;
 		this.updateIncident = updateIncident;
 		this.changeIncidentStatus = changeIncidentStatus;
+		this.addIncidentNote = addIncidentNote;
 	}
 
 	@GetMapping
@@ -119,6 +125,18 @@ public class IncidentController {
 				new ChangeIncidentStatusCommand(
 						id,
 						request.status(),
+						authentication.getName())));
+	}
+
+	@PostMapping("/{id}/events")
+	IncidentDetailResponse addNote(
+			@PathVariable long id,
+			@Valid @RequestBody IncidentNoteRequest request,
+			Authentication authentication) {
+		return IncidentDetailResponse.from(addIncidentNote.execute(
+				new AddIncidentNoteCommand(
+						id,
+						request.note(),
 						authentication.getName())));
 	}
 }

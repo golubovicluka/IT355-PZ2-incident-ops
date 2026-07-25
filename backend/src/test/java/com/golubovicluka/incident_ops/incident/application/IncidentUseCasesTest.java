@@ -15,6 +15,7 @@ import java.util.Optional;
 
 import com.golubovicluka.incident_ops.identity.application.FindAssignableUser;
 import com.golubovicluka.incident_ops.identity.application.dto.AssignableUserView;
+import com.golubovicluka.incident_ops.incident.application.command.AddIncidentNoteCommand;
 import com.golubovicluka.incident_ops.incident.application.command.ChangeIncidentStatusCommand;
 import com.golubovicluka.incident_ops.incident.application.command.CreateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.command.UpdateIncidentCommand;
@@ -58,6 +59,7 @@ class IncidentUseCasesTest {
 	private ReferenceCodeGenerator referenceCodeGenerator;
 
 	private CreateIncident createIncident;
+	private AddIncidentNote addIncidentNote;
 	private ChangeIncidentStatus changeIncidentStatus;
 	private GetIncident getIncident;
 	private ListIncidents listIncidents;
@@ -70,6 +72,10 @@ class IncidentUseCasesTest {
 				findManagedService,
 				findAssignableUser,
 				referenceCodeGenerator,
+				CLOCK);
+		addIncidentNote = new AddIncidentNote(
+				incidents,
+				findAssignableUser,
 				CLOCK);
 		changeIncidentStatus = new ChangeIncidentStatus(
 				incidents,
@@ -314,6 +320,80 @@ class IncidentUseCasesTest {
 	}
 
 	@Test
+	void addsNoteWithAuthenticatedActorAndServerTime() {
+		Incident existing = persistedIncident();
+		when(incidents.findById(42L)).thenReturn(Optional.of(existing));
+		when(findAssignableUser.byUsername("ana"))
+				.thenReturn(Optional.of(assigneeView()));
+		when(incidents.save(any(Incident.class)))
+				.thenAnswer(invocation -> invocation.getArgument(0));
+
+		IncidentDetailView updated = addIncidentNote.execute(
+				new AddIncidentNoteCommand(
+						42L,
+						"  Rolled back the checkout deployment.  ",
+						"ana"));
+
+		assertThat(updated.status()).isEqualTo(IncidentStatus.OPEN);
+		assertThat(updated.updatedAt()).isEqualTo(NOW);
+		assertThat(updated.timeline().getLast()).satisfies(event -> {
+			assertThat(event.kind())
+					.isEqualTo(com.golubovicluka.incident_ops.incident.domain.IncidentEventKind.NOTE_ADDED);
+			assertThat(event.actor().username()).isEqualTo("ana");
+			assertThat(event.note())
+					.isEqualTo("Rolled back the checkout deployment.");
+			assertThat(event.previousStatus()).isNull();
+			assertThat(event.newStatus()).isNull();
+			assertThat(event.occurredAt()).isEqualTo(NOW);
+		});
+	}
+
+	@Test
+	void rejectedNoteDoesNotSaveIncidentOrAppendEvent() {
+		Incident existing = persistedIncident();
+		when(incidents.findById(42L)).thenReturn(Optional.of(existing));
+		when(findAssignableUser.byUsername("ana"))
+				.thenReturn(Optional.of(assigneeView()));
+
+		assertThatThrownBy(() -> addIncidentNote.execute(
+				new AddIncidentNoteCommand(42L, " ", "ana")))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note must not be blank");
+		assertThatThrownBy(() -> addIncidentNote.execute(
+				new AddIncidentNoteCommand(
+						42L,
+						"x".repeat(IncidentEvent.MAX_NOTE_LENGTH + 1),
+						"ana")))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessage("note must not exceed 2000 characters");
+
+		verify(incidents, never()).save(any(Incident.class));
+		assertThat(existing.events()).hasSize(1);
+	}
+
+	@Test
+	void noteRejectsUnknownIncidentOrAuthenticatedActor() {
+		when(incidents.findById(404L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> addIncidentNote.execute(
+				new AddIncidentNoteCommand(404L, "Investigating.", "ana")))
+				.isInstanceOf(IncidentNotFoundException.class);
+
+		when(incidents.findById(42L)).thenReturn(Optional.of(persistedIncident()));
+		when(findAssignableUser.byUsername("missing"))
+				.thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> addIncidentNote.execute(
+				new AddIncidentNoteCommand(
+						42L,
+						"Investigating.",
+						"missing")))
+				.isInstanceOf(IncidentActorNotFoundException.class);
+
+		verify(incidents, never()).save(any(Incident.class));
+	}
+
+	@Test
 	void reportsUnknownIncidentForDetailAndUpdate() {
 		when(incidents.findById(404L)).thenReturn(Optional.empty());
 
@@ -352,6 +432,7 @@ class IncidentUseCasesTest {
 						event.actor(),
 						event.previousStatus(),
 						event.newStatus(),
+						event.note(),
 						event.occurredAt())));
 	}
 
@@ -376,6 +457,7 @@ class IncidentUseCasesTest {
 						99L,
 						com.golubovicluka.incident_ops.incident.domain.IncidentEventKind.CREATED,
 						reporter,
+						null,
 						null,
 						null,
 						NOW.minusSeconds(600))));

@@ -30,6 +30,7 @@ import {
   updateIncident,
 } from "@/features/incidents/api/incidents-api"
 import { IncidentFormDialog } from "@/features/incidents/components/IncidentFormDialog"
+import { IncidentNoteForm } from "@/features/incidents/components/IncidentNoteForm"
 import type {
   IncidentDetail,
   IncidentEventKind,
@@ -391,6 +392,10 @@ export function IncidentDetailPanel({
                 Timeline
               </h3>
             </div>
+            <IncidentNoteForm
+              incidentId={incident.id}
+              onSuccess={acceptUpdate}
+            />
             <ol
               aria-label="Incident timeline"
               className="mt-4 space-y-4 border-l pl-4"
@@ -411,10 +416,17 @@ export function IncidentDetailPanel({
                           {statusLabels[entry.newStatus]}
                         </p>
                       ) : null}
+                      {entry.kind === "NOTE_ADDED" && entry.note ? (
+                        <p className="mt-2 whitespace-pre-wrap text-sm">
+                          {entry.note}
+                        </p>
+                      ) : null}
                       <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
                         <UserRoundIcon className="size-3.5" />
                         {entry.kind === "CREATED"
                           ? `Created by ${entry.actor.displayName}`
+                          : entry.kind === "NOTE_ADDED"
+                            ? `Added by ${entry.actor.displayName}`
                           : `Recorded by ${entry.actor.displayName}`}
                       </p>
                     </div>

@@ -3,6 +3,7 @@ package com.golubovicluka.incident_ops.incident.infrastructure.persistence;
 import java.time.Instant;
 
 import com.golubovicluka.incident_ops.identity.infrastructure.persistence.UserAccountJpaEntity;
+import com.golubovicluka.incident_ops.incident.domain.IncidentEvent;
 import com.golubovicluka.incident_ops.incident.domain.IncidentEventKind;
 import com.golubovicluka.incident_ops.incident.domain.IncidentStatus;
 import jakarta.persistence.Column;
@@ -48,6 +49,9 @@ class IncidentEventJpaEntity {
 	@Column(name = "new_status", updatable = false, length = 32)
 	private IncidentStatus newStatus;
 
+	@Column(updatable = false, length = IncidentEvent.MAX_NOTE_LENGTH)
+	private String note;
+
 	protected IncidentEventJpaEntity() {
 	}
 
@@ -57,12 +61,14 @@ class IncidentEventJpaEntity {
 			UserAccountJpaEntity actor,
 			IncidentStatus previousStatus,
 			IncidentStatus newStatus,
+			String note,
 			Instant occurredAt) {
 		this.incident = incident;
 		this.kind = kind;
 		this.actor = actor;
 		this.previousStatus = previousStatus;
 		this.newStatus = newStatus;
+		this.note = note;
 		this.occurredAt = occurredAt;
 	}
 
@@ -84,6 +90,10 @@ class IncidentEventJpaEntity {
 
 	IncidentStatus getNewStatus() {
 		return newStatus;
+	}
+
+	String getNote() {
+		return note;
 	}
 
 	Instant getOccurredAt() {

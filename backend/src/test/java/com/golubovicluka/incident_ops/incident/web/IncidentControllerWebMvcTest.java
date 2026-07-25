@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.List;
 
+import com.golubovicluka.incident_ops.incident.application.AddIncidentNote;
 import com.golubovicluka.incident_ops.incident.application.CreateIncident;
 import com.golubovicluka.incident_ops.incident.application.ChangeIncidentStatus;
 import com.golubovicluka.incident_ops.incident.application.GetIncident;
@@ -20,6 +21,7 @@ import com.golubovicluka.incident_ops.incident.application.IncidentAssigneeNotFo
 import com.golubovicluka.incident_ops.incident.application.IncidentManagedServiceNotFoundException;
 import com.golubovicluka.incident_ops.incident.application.ListIncidents;
 import com.golubovicluka.incident_ops.incident.application.UpdateIncident;
+import com.golubovicluka.incident_ops.incident.application.command.AddIncidentNoteCommand;
 import com.golubovicluka.incident_ops.incident.application.command.ChangeIncidentStatusCommand;
 import com.golubovicluka.incident_ops.incident.application.command.CreateIncidentCommand;
 import com.golubovicluka.incident_ops.incident.application.command.UpdateIncidentCommand;
@@ -70,6 +72,9 @@ class IncidentControllerWebMvcTest {
 
 	@MockitoBean
 	private CreateIncident createIncident;
+
+	@MockitoBean
+	private AddIncidentNote addIncidentNote;
 
 	@MockitoBean
 	private ChangeIncidentStatus changeIncidentStatus;
@@ -234,6 +239,41 @@ class IncidentControllerWebMvcTest {
 
 	@Test
 	@WithMockUser(username = "responder", roles = "RESPONDER")
+	void addsNoteUsingAuthenticatedActorAndReturnsUpdatedTimeline()
+			throws Exception {
+		AddIncidentNoteCommand command = new AddIncidentNoteCommand(
+				42L,
+				"Rolled back the checkout deployment.",
+				"responder");
+		given(addIncidentNote.execute(command)).willReturn(notedDetail());
+
+		mockMvc.perform(post("/api/incidents/42/events")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "note": "Rolled back the checkout deployment.",
+								  "actorUsername": "attacker"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("OPEN"))
+				.andExpect(jsonPath("$.timeline[1].kind")
+						.value("NOTE_ADDED"))
+				.andExpect(jsonPath("$.timeline[1].note")
+						.value("Rolled back the checkout deployment."))
+				.andExpect(jsonPath("$.timeline[1].previousStatus")
+						.doesNotExist())
+				.andExpect(jsonPath("$.timeline[1].newStatus").doesNotExist())
+				.andExpect(jsonPath("$.timeline[1].actor.username")
+						.value("responder"))
+				.andExpect(jsonPath("$.timeline[1].occurredAt")
+						.value("2026-07-25T08:20:30Z"));
+
+		verify(addIncidentNote).execute(command);
+	}
+
+	@Test
+	@WithMockUser(username = "responder", roles = "RESPONDER")
 	void rejectsInvalidStatusTransitionWithStableConflict() throws Exception {
 		ChangeIncidentStatusCommand command = new ChangeIncidentStatusCommand(
 				42L,
@@ -283,6 +323,44 @@ class IncidentControllerWebMvcTest {
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.message")
 						.value("Authenticated incident actor does not exist"));
+	}
+
+	@Test
+	@WithMockUser(username = "responder", roles = "RESPONDER")
+	void validatesNoteContentAndUnknownIncident() throws Exception {
+		mockMvc.perform(post("/api/incidents/42/events")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"note": " "}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.fieldErrors.note")
+						.value("Incident note is required"));
+
+		mockMvc.perform(post("/api/incidents/42/events")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"note": "%s"}
+								""".formatted("x".repeat(2001))))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.fieldErrors.note")
+						.value("Incident note must not exceed 2000 characters"));
+
+		AddIncidentNoteCommand missing = new AddIncidentNoteCommand(
+				404L,
+				"Investigating.",
+				"responder");
+		given(addIncidentNote.execute(missing))
+				.willThrow(new IncidentNotFoundException());
+
+		mockMvc.perform(post("/api/incidents/404/events")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"note": "Investigating."}
+								"""))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.message")
+						.value("Incident does not exist"));
 	}
 
 	@Test
@@ -408,6 +486,12 @@ class IncidentControllerWebMvcTest {
 								{"status": "ACKNOWLEDGED"}
 								"""))
 				.andExpect(status().isUnauthorized());
+		mockMvc.perform(post("/api/incidents/42/events")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"note": "Investigating."}
+								"""))
+				.andExpect(status().isUnauthorized());
 	}
 
 	private IncidentSummaryView summary() {
@@ -450,6 +534,7 @@ class IncidentControllerWebMvcTest {
 						reporter,
 						null,
 						null,
+						null,
 						CREATED_AT)));
 	}
 
@@ -482,6 +567,7 @@ class IncidentControllerWebMvcTest {
 								reporter,
 								null,
 								null,
+								null,
 								CREATED_AT),
 						new IncidentDetailView.EventView(
 								100L,
@@ -489,7 +575,51 @@ class IncidentControllerWebMvcTest {
 								reporter,
 								IncidentStatus.OPEN,
 								IncidentStatus.ACKNOWLEDGED,
+								null,
 								acknowledgedAt)));
+	}
+
+	private IncidentDetailView notedDetail() {
+		IncidentDetailView.UserView reporter =
+				new IncidentDetailView.UserView(
+						11L,
+						"responder",
+						"Response Engineer");
+		Instant notedAt = CREATED_AT.plusSeconds(300);
+		return new IncidentDetailView(
+				42L,
+				"INC-20260725-AB12CD34",
+				"Checkout failures",
+				"Card payments are timing out.",
+				IncidentPriority.SEV1,
+				IncidentStatus.OPEN,
+				new IncidentDetailView.ManagedServiceView(7L, "Payments API"),
+				reporter,
+				new IncidentDetailView.UserView(12L, "ana", "Ana Anić"),
+				CREATED_AT,
+				notedAt,
+				null,
+				null,
+				List.of(
+						IncidentStatus.ACKNOWLEDGED,
+						IncidentStatus.INVESTIGATING),
+				List.of(
+						new IncidentDetailView.EventView(
+								99L,
+								IncidentEventKind.CREATED,
+								reporter,
+								null,
+								null,
+								null,
+								CREATED_AT),
+						new IncidentDetailView.EventView(
+								100L,
+								IncidentEventKind.NOTE_ADDED,
+								reporter,
+								null,
+								null,
+								"Rolled back the checkout deployment.",
+								notedAt)));
 	}
 
 	private String request(String title, long serviceId, String assigneeId) {

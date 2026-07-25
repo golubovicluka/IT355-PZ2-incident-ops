@@ -244,6 +244,40 @@ class IncidentPersistenceAdapterTest extends PostgreSQLContainerSupport {
 	}
 
 	@Test
+	void persistsImmutableTimelineNote() {
+		Incident saved = incidents.save(incident(
+				"INC-20260725-NOTE",
+				"Noted incident",
+				IncidentPriority.SEV2,
+				IncidentStatus.OPEN,
+				payments,
+				assignee,
+				BASE_TIME));
+		Instant notedAt = BASE_TIME.plusSeconds(180);
+
+		Incident noted = incidents.save(saved.addNote(
+				"Rolled back the checkout deployment.",
+				toUser(assignee),
+				notedAt));
+		entityManager.clear();
+
+		Incident loaded = incidents.findById(noted.id()).orElseThrow();
+		assertThat(loaded.status()).isEqualTo(IncidentStatus.OPEN);
+		assertThat(loaded.updatedAt()).isEqualTo(notedAt);
+		assertThat(loaded.events()).hasSize(2);
+		assertThat(loaded.events().getLast()).satisfies(event -> {
+			assertThat(event.id()).isNotNull();
+			assertThat(event.kind()).isEqualTo(IncidentEventKind.NOTE_ADDED);
+			assertThat(event.actor().id()).isEqualTo(assignee.id());
+			assertThat(event.note())
+					.isEqualTo("Rolled back the checkout deployment.");
+			assertThat(event.previousStatus()).isNull();
+			assertThat(event.newStatus()).isNull();
+			assertThat(event.occurredAt()).isEqualTo(notedAt);
+		});
+	}
+
+	@Test
 	void databaseConstraintRejectsDuplicateReferenceCode() {
 		incidents.save(incident(
 				"INC-20260725-DUPLICATE",

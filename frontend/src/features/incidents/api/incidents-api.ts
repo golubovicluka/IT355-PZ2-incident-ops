@@ -55,3 +55,9 @@ export function transitionIncidentStatus(
     status,
   })
 }
+
+export function addIncidentNote(id: number, note: string) {
+  return apiClient.post<IncidentDetail>(`${INCIDENTS_PATH}/${id}/events`, {
+    note,
+  })
+}

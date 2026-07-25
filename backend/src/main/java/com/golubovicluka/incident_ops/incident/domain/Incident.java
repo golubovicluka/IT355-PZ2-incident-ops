@@ -185,6 +185,35 @@ public final class Incident {
 				transitionedEvents);
 	}
 
+	public Incident addNote(
+			String note,
+			IncidentUser actor,
+			Instant notedAt) {
+		Objects.requireNonNull(actor, "actor must not be null");
+		Objects.requireNonNull(notedAt, "notedAt must not be null");
+		if (notedAt.isBefore(updatedAt)) {
+			throw new IllegalArgumentException(
+					"notedAt must not be before updatedAt");
+		}
+		List<IncidentEvent> notedEvents = new ArrayList<>(events);
+		notedEvents.add(IncidentEvent.noteAdded(actor, note, notedAt));
+		return new Incident(
+				id,
+				referenceCode,
+				title,
+				description,
+				priority,
+				status,
+				managedService,
+				reporter,
+				assignee,
+				createdAt,
+				notedAt,
+				acknowledgedAt,
+				resolvedAt,
+				notedEvents);
+	}
+
 	public Long id() {
 		return id;
 	}

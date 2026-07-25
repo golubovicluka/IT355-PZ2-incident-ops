@@ -72,6 +72,7 @@ public record IncidentDetailResponse(
 			UserResponse actor,
 			IncidentStatus previousStatus,
 			IncidentStatus newStatus,
+			String note,
 			Instant occurredAt) {
 
 		static EventResponse from(IncidentDetailView.EventView event) {
@@ -81,6 +82,7 @@ public record IncidentDetailResponse(
 					UserResponse.from(event.actor()),
 					event.previousStatus(),
 					event.newStatus(),
+					event.note(),
 					event.occurredAt());
 		}
 	}
