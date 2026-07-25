@@ -1,6 +1,7 @@
 export {
   addIncidentNote,
   createIncident,
+  deleteIncident,
   escalateIncident,
   getIncident,
   listIncidents,

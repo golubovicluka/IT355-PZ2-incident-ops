@@ -13,16 +13,30 @@ import {
 import { listServiceCatalog } from "@/shared/catalogs/catalog-api"
 import type { ManagedServiceCatalogItem } from "@/shared/catalogs/catalog.types"
 
+const authenticationMocks = vi.hoisted(() => ({
+  hasRole: vi.fn(),
+}))
+
+vi.mock("@/features/authentication", () => ({
+  useAuthentication: () => ({
+    hasRole: authenticationMocks.hasRole,
+  }),
+}))
+
 vi.mock("@/features/incidents", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/incidents")>()),
   IncidentDetailPanel: ({
     incidentId,
     initialIncident,
     onUpdated,
+    canDelete,
+    onDeleted,
   }: {
     incidentId: number
     initialIncident?: IncidentDetail
     onUpdated?: (incident: IncidentDetail) => void
+    canDelete?: boolean
+    onDeleted?: (incident: IncidentDetail) => void
   }) => (
     <div>
       Incident detail {incidentId}
@@ -33,6 +47,14 @@ vi.mock("@/features/incidents", async (importOriginal) => ({
       >
         Complete incident update
       </button>
+      {canDelete ? (
+        <button
+          onClick={() => onDeleted?.(selectedIncidentDetail)}
+          type="button"
+        >
+          Delete selected incident
+        </button>
+      ) : null}
     </div>
   ),
   IncidentFormDialog: ({
@@ -137,8 +159,20 @@ const createdIncident: IncidentDetail = {
   ],
 }
 
-const acknowledgedIncident: IncidentDetail = {
+const selectedIncidentDetail: IncidentDetail = {
   ...createdIncident,
+  ...incident,
+  description: "Card payments are timing out.",
+  reporter: createdIncident.reporter,
+  acknowledgedAt: null,
+  resolvedAt: null,
+  allowedTransitions: ["ACKNOWLEDGED", "INVESTIGATING"],
+  escalations: [],
+  timeline: createdIncident.timeline,
+}
+
+const acknowledgedIncident: IncidentDetail = {
+  ...selectedIncidentDetail,
   status: "ACKNOWLEDGED",
   acknowledgedAt: "2026-07-25T08:18:30Z",
   allowedTransitions: ["INVESTIGATING"],
@@ -167,12 +201,40 @@ describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockListServices.mockResolvedValue([])
+    authenticationMocks.hasRole.mockReturnValue(false)
     mockGetOperationalSummary.mockResolvedValue({
       open: 3,
       active: 2,
       resolved: 5,
       breached: 1,
     })
+  })
+
+  it("removes a deleted incident from the administrator queue and updates feedback", async () => {
+    const user = userEvent.setup()
+    authenticationMocks.hasRole.mockImplementation(
+      (role) => role === "ADMIN",
+    )
+    mockListIncidents.mockResolvedValue([incident])
+
+    renderDashboard()
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: new RegExp(incident.referenceCode),
+      }),
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Delete selected incident" }),
+    )
+
+    expect(screen.queryByText(incident.referenceCode)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(`${incident.referenceCode} was deleted.`),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText("Incident detail 42"),
+    ).not.toBeInTheDocument()
   })
 
   it("shows server-calculated counters and incident SLA deadlines", async () => {

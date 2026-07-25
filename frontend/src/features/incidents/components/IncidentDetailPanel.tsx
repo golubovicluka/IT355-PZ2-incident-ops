@@ -3,10 +3,22 @@ import {
   Clock3Icon,
   PencilIcon,
   RefreshCwIcon,
+  Trash2Icon,
   UserRoundIcon,
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import {
   Alert,
   AlertDescription,
@@ -25,6 +37,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
+  deleteIncident,
   getIncident,
   transitionIncidentStatus,
   updateIncident,
@@ -98,14 +111,18 @@ function formatDateTime(value: string) {
 }
 
 interface IncidentDetailPanelProps {
+  canDelete?: boolean
   incidentId: number
   initialIncident?: IncidentDetail
+  onDeleted?: (incident: IncidentDetail) => void
   onUpdated: (incident: IncidentDetail) => void
 }
 
 export function IncidentDetailPanel({
+  canDelete = false,
   incidentId,
   initialIncident,
+  onDeleted,
   onUpdated,
 }: IncidentDetailPanelProps) {
   const matchingInitialIncident =
@@ -121,6 +138,9 @@ export function IncidentDetailPanel({
   const [isEditing, setIsEditing] = useState(false)
   const [pendingStatus, setPendingStatus] = useState<IncidentStatus>()
   const [transitionError, setTransitionError] = useState<string>()
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deletionError, setDeletionError] = useState<string>()
   const editButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -189,6 +209,28 @@ export function IncidentDetailPanel({
       )
     } finally {
       setPendingStatus(undefined)
+    }
+  }
+
+  async function confirmDeletion() {
+    if (!incident || isDeleting) {
+      return
+    }
+
+    setIsDeleting(true)
+    setDeletionError(undefined)
+    try {
+      await deleteIncident(incident.id)
+      setIsDeleteOpen(false)
+      onDeleted?.(incident)
+    } catch (error) {
+      setDeletionError(
+        error instanceof ApiError
+          ? error.message
+          : "The incident could not be deleted. Try again.",
+      )
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -269,15 +311,79 @@ export function IncidentDetailPanel({
             Reported for {incident.managedService.name}
           </CardDescription>
           <CardAction>
-            <Button
-              onClick={() => setIsEditing(true)}
-              ref={editButtonRef}
-              size="sm"
-              variant="outline"
-            >
-              <PencilIcon />
-              Edit incident
-            </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              {canDelete ? (
+                <AlertDialog
+                  onOpenChange={(open) => {
+                    if (!isDeleting) {
+                      setIsDeleteOpen(open)
+                      if (open) {
+                        setDeletionError(undefined)
+                      }
+                    }
+                  }}
+                  open={isDeleteOpen}
+                >
+                  <AlertDialogTrigger
+                    render={
+                      <Button
+                        size="sm"
+                        type="button"
+                        variant="destructive"
+                      />
+                    }
+                  >
+                    <Trash2Icon />
+                    Delete incident
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Delete {incident.referenceCode}?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This permanently deletes incident{" "}
+                        <span className="font-mono font-medium text-foreground">
+                          {incident.referenceCode}
+                        </span>
+                        , including its timeline and escalation history.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {deletionError ? (
+                      <Alert variant="destructive">
+                        <AlertTriangleIcon />
+                        <AlertTitle>Incident not deleted</AlertTitle>
+                        <AlertDescription>{deletionError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={isDeleting}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        disabled={isDeleting}
+                        onClick={() => void confirmDeletion()}
+                        variant="destructive"
+                      >
+                        <Trash2Icon />
+                        {isDeleting
+                          ? "Deleting…"
+                          : `Delete ${incident.referenceCode}`}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ) : null}
+              <Button
+                onClick={() => setIsEditing(true)}
+                ref={editButtonRef}
+                size="sm"
+                variant="outline"
+              >
+                <PencilIcon />
+                Edit incident
+              </Button>
+            </div>
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-6">

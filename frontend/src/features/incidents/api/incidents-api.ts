@@ -68,3 +68,7 @@ export function escalateIncident(id: number, reason: string) {
     { reason },
   )
 }
+
+export function deleteIncident(id: number) {
+  return apiClient.delete<void>(`${INCIDENTS_PATH}/${id}`)
+}

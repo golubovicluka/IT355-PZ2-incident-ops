@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
   addIncidentNote,
+  deleteIncident,
   escalateIncident,
   getIncident,
   transitionIncidentStatus,
@@ -19,6 +20,7 @@ import {
 
 vi.mock("@/features/incidents/api/incidents-api", () => ({
   addIncidentNote: vi.fn(),
+  deleteIncident: vi.fn(),
   escalateIncident: vi.fn(),
   getIncident: vi.fn(),
   transitionIncidentStatus: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock("@/shared/catalogs/catalog-api", () => ({
 
 const mockGetIncident = vi.mocked(getIncident)
 const mockAddIncidentNote = vi.mocked(addIncidentNote)
+const mockDeleteIncident = vi.mocked(deleteIncident)
 const mockEscalateIncident = vi.mocked(escalateIncident)
 const mockTransitionIncidentStatus = vi.mocked(transitionIncidentStatus)
 const mockUpdateIncident = vi.mocked(updateIncident)
@@ -180,6 +183,110 @@ describe("IncidentDetailPanel", () => {
     expect(
       screen.getByText(/Deadline/, { selector: "span" }),
     ).toBeInTheDocument()
+  })
+
+  it("hides deletion from responders and names the incident in administrator confirmation", async () => {
+    const user = userEvent.setup()
+    const onDeleted = vi.fn()
+
+    const { rerender } = render(
+      <IncidentDetailPanel
+        incidentId={incident.id}
+        initialIncident={incident}
+        onDeleted={onDeleted}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.queryByRole("button", { name: "Delete incident" }),
+    ).not.toBeInTheDocument()
+
+    rerender(
+      <IncidentDetailPanel
+        canDelete
+        incidentId={incident.id}
+        initialIncident={incident}
+        onDeleted={onDeleted}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete incident" }),
+    )
+
+    expect(
+      screen.getByRole("heading", {
+        name: `Delete ${incident.referenceCode}?`,
+      }),
+    ).toBeInTheDocument()
+    const confirmation = within(screen.getByRole("alertdialog"))
+    expect(
+      confirmation.getByText(incident.referenceCode),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", {
+        name: `Delete ${incident.referenceCode}`,
+      }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }))
+
+    expect(mockDeleteIncident).not.toHaveBeenCalled()
+    expect(onDeleted).not.toHaveBeenCalled()
+  })
+
+  it("removes the incident only after deletion succeeds and preserves it after failure", async () => {
+    const user = userEvent.setup()
+    const onDeleted = vi.fn()
+    mockDeleteIncident
+      .mockRejectedValueOnce(
+        new ApiError({
+          timestamp: "2026-07-25T12:00:00Z",
+          status: 503,
+          error: "Service Unavailable",
+          message: "The incident could not be deleted",
+          path: "/api/incidents/42",
+          fieldErrors: {},
+        }),
+      )
+      .mockResolvedValueOnce(undefined)
+
+    render(
+      <IncidentDetailPanel
+        canDelete
+        incidentId={incident.id}
+        initialIncident={incident}
+        onDeleted={onDeleted}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete incident" }),
+    )
+    await user.click(
+      screen.getByRole("button", {
+        name: `Delete ${incident.referenceCode}`,
+      }),
+    )
+
+    expect(
+      await screen.findByText("The incident could not be deleted"),
+    ).toBeInTheDocument()
+    expect(screen.getByText(incident.title)).toBeInTheDocument()
+    expect(onDeleted).not.toHaveBeenCalled()
+
+    await user.click(
+      screen.getByRole("button", {
+        name: `Delete ${incident.referenceCode}`,
+      }),
+    )
+
+    expect(mockDeleteIncident).toHaveBeenCalledTimes(2)
+    expect(mockDeleteIncident).toHaveBeenLastCalledWith(incident.id)
+    expect(onDeleted).toHaveBeenCalledWith(incident)
   })
 
   it("keeps the loaded detail and edited values after an update fails", async () => {

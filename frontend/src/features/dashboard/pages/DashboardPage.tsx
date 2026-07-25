@@ -41,6 +41,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useAuthentication } from "@/features/authentication"
 import {
   createIncident,
   IncidentDetailPanel,
@@ -62,6 +63,11 @@ import { listServiceCatalog } from "@/shared/catalogs/catalog-api"
 import type { ManagedServiceCatalogItem } from "@/shared/catalogs/catalog.types"
 
 type LoadState = "loading" | "ready" | "error"
+
+interface SuccessFeedback {
+  title: string
+  message: string
+}
 
 const statusLabels: Record<IncidentStatus, string> = {
   OPEN: "Open",
@@ -488,6 +494,7 @@ function IncidentQueue({
 }
 
 export function DashboardPage() {
+  const { hasRole } = useAuthentication()
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(
     () => filtersFromSearchParams(searchParams),
@@ -503,7 +510,8 @@ export function DashboardPage() {
   const [selectedIncidentId, setSelectedIncidentId] = useState<number>()
   const [selectedIncident, setSelectedIncident] = useState<IncidentDetail>()
   const [isCreating, setIsCreating] = useState(false)
-  const [successFeedback, setSuccessFeedback] = useState<string>()
+  const [successFeedback, setSuccessFeedback] =
+    useState<SuccessFeedback>()
   const createButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -647,17 +655,56 @@ export function DashboardPage() {
   function acceptCreatedIncident(incident: IncidentDetail) {
     acceptIncident(incident)
     refreshOperationalSummary()
-    setSuccessFeedback(
-      `${incident.referenceCode} was reported successfully.`,
-    )
+    setSuccessFeedback({
+      title: "Incident reported",
+      message: `${incident.referenceCode} was reported successfully.`,
+    })
   }
 
   function acceptUpdatedIncident(incident: IncidentDetail) {
     acceptIncident(incident)
     refreshOperationalSummary()
-    setSuccessFeedback(
-      `${incident.referenceCode} was updated successfully.`,
+    setSuccessFeedback({
+      title: "Incident updated",
+      message: `${incident.referenceCode} was updated successfully.`,
+    })
+  }
+
+  function acceptDeletedIncident(incident: IncidentDetail) {
+    setIncidents((current) =>
+      current.filter((item) => item.id !== incident.id),
     )
+    setSelectedIncidentId(undefined)
+    setSelectedIncident(undefined)
+    setSummary((current) => {
+      if (!current) {
+        return current
+      }
+
+      return {
+        open:
+          incident.status === "OPEN"
+            ? Math.max(0, current.open - 1)
+            : current.open,
+        active:
+          incident.status === "ACKNOWLEDGED" ||
+          incident.status === "INVESTIGATING"
+            ? Math.max(0, current.active - 1)
+            : current.active,
+        resolved:
+          incident.status === "RESOLVED" || incident.status === "CLOSED"
+            ? Math.max(0, current.resolved - 1)
+            : current.resolved,
+        breached:
+          incident.sla.state === "BREACHED"
+            ? Math.max(0, current.breached - 1)
+            : current.breached,
+      }
+    })
+    setSuccessFeedback({
+      title: "Incident deleted",
+      message: `${incident.referenceCode} was deleted.`,
+    })
   }
 
   const hasFilters = Boolean(
@@ -694,8 +741,8 @@ export function DashboardPage() {
       {successFeedback ? (
         <Alert>
           <CheckCircle2Icon />
-          <AlertTitle>Incident saved</AlertTitle>
-          <AlertDescription>{successFeedback}</AlertDescription>
+          <AlertTitle>{successFeedback.title}</AlertTitle>
+          <AlertDescription>{successFeedback.message}</AlertDescription>
           <AlertAction>
             <Button
               aria-label="Dismiss success message"
@@ -789,8 +836,10 @@ export function DashboardPage() {
 
       {selectedIncidentId ? (
         <IncidentDetailPanel
+          canDelete={hasRole("ADMIN")}
           incidentId={selectedIncidentId}
           initialIncident={selectedIncident}
+          onDeleted={acceptDeletedIncident}
           onUpdated={acceptUpdatedIncident}
         />
       ) : null}
